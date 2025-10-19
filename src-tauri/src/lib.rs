@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{self, File},
-    io::Write,
+    io::{self, Write},
     path::{Path, PathBuf},
     time::UNIX_EPOCH,
 };
@@ -159,6 +159,64 @@ enum NewEntryKind {
     Folder,
 }
 
+fn normalize_entry_name(raw: &str) -> Result<String, String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err("名称不能为空".into());
+    }
+
+    if trimmed == "." || trimmed == ".." {
+        return Err("名称不可为 . 或 ..".into());
+    }
+
+    let invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
+    if trimmed.chars().any(|ch| invalid_chars.contains(&ch)) {
+        return Err("名称包含不允许的字符".into());
+    }
+
+    Ok(trimmed.to_string())
+}
+
+fn is_cross_device_error(err: &io::Error) -> bool {
+    match err.raw_os_error() {
+        Some(code) if code == 17 || code == 18 => true,
+        _ => false,
+    }
+}
+
+fn copy_entry_recursive(source: &Path, destination: &Path) -> Result<(), String> {
+    if source.is_dir() {
+        fs::create_dir(destination).map_err(|e| format!("复制目录失败: {e}"))?;
+
+        let entries = fs::read_dir(source).map_err(|e| format!("复制目录失败: {e}"))?;
+        for entry in entries {
+            let entry = entry.map_err(|e| format!("复制目录失败: {e}"))?;
+            let file_type = entry
+                .file_type()
+                .map_err(|e| format!("复制目录失败: {e}"))?;
+
+            if file_type.is_symlink() {
+                continue;
+            }
+
+            let path = entry.path();
+            let dest_path = destination.join(entry.file_name());
+
+            if file_type.is_dir() {
+                copy_entry_recursive(&path, &dest_path)?;
+            } else if file_type.is_file() {
+                fs::copy(&path, &dest_path).map_err(|e| format!("复制文件失败: {e}"))?;
+            }
+        }
+    } else if source.is_file() {
+        fs::copy(source, destination).map_err(|e| format!("复制文件失败: {e}"))?;
+    } else {
+        return Err("仅支持复制文件或文件夹".into());
+    }
+
+    Ok(())
+}
+
 #[tauri::command]
 fn create_project_entry(
     app: tauri::AppHandle,
@@ -183,21 +241,9 @@ fn create_project_entry(
         return Err("目标并不是有效的目录".into());
     }
 
-    let trimmed = name.trim();
-    if trimmed.is_empty() {
-        return Err("名称不能为空".into());
-    }
+    let normalized_name = normalize_entry_name(&name)?;
 
-    if trimmed == "." || trimmed == ".." {
-        return Err("名称不可为 . 或 ..".into());
-    }
-
-    let invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
-    if trimmed.chars().any(|ch| invalid_chars.contains(&ch)) {
-        return Err("名称包含不允许的字符".into());
-    }
-
-    let target_path = canonical_parent.join(trimmed);
+    let target_path = canonical_parent.join(&normalized_name);
     if target_path.exists() {
         return Err("同名文件或目录已存在".into());
     }
@@ -212,6 +258,217 @@ fn create_project_entry(
     }
 
     Ok(())
+}
+
+#[tauri::command]
+fn delete_project_entry(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    let projects_root = ensure_projects_dir(&app)?
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
+
+    let entry_path = PathBuf::from(&path);
+    let canonical_entry = entry_path
+        .canonicalize()
+        .map_err(|e| format!("无法删除目标: {e}"))?;
+
+    if !canonical_entry.starts_with(&projects_root) {
+        return Err("目标路径不在受信目录内".into());
+    }
+
+    if canonical_entry == projects_root {
+        return Err("无法删除项目根目录".into());
+    }
+
+    if canonical_entry.is_dir() {
+        fs::remove_dir_all(&canonical_entry).map_err(|e| format!("删除目录失败: {e}"))?;
+    } else if canonical_entry.is_file() {
+        fs::remove_file(&canonical_entry).map_err(|e| format!("删除文件失败: {e}"))?;
+    } else {
+        return Err("目标既不是文件也不是目录".into());
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+fn rename_project_entry(
+    app: tauri::AppHandle,
+    path: String,
+    new_name: String,
+) -> Result<(), String> {
+    let projects_root = ensure_projects_dir(&app)?
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
+
+    let entry_path = PathBuf::from(&path);
+    let canonical_entry = entry_path
+        .canonicalize()
+        .map_err(|e| format!("无法重命名目标: {e}"))?;
+
+    if !canonical_entry.starts_with(&projects_root) {
+        return Err("目标路径不在受信目录内".into());
+    }
+
+    let normalized_name = normalize_entry_name(&new_name)?;
+
+    let parent = canonical_entry
+        .parent()
+        .ok_or_else(|| "无法确定父目录".to_string())?;
+
+    let destination = parent.join(&normalized_name);
+
+    if destination == canonical_entry {
+        return Ok(());
+    }
+
+    if destination.exists() {
+        return Err("同名文件或目录已存在".into());
+    }
+
+    fs::rename(&canonical_entry, &destination).map_err(|e| format!("重命名失败: {e}"))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn copy_project_entry(
+    app: tauri::AppHandle,
+    source_path: String,
+    target_directory_path: String,
+) -> Result<(), String> {
+    let projects_root = ensure_projects_dir(&app)?
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
+
+    let source = PathBuf::from(&source_path);
+    let canonical_source = source
+        .canonicalize()
+        .map_err(|e| format!("无法复制源路径: {e}"))?;
+
+    if !canonical_source.starts_with(&projects_root) {
+        return Err("源路径不在受信目录内".into());
+    }
+
+    let target_dir = PathBuf::from(&target_directory_path);
+    let canonical_target_dir = target_dir
+        .canonicalize()
+        .map_err(|e| format!("无法访问目标目录: {e}"))?;
+
+    if !canonical_target_dir.starts_with(&projects_root) {
+        return Err("目标路径不在受信目录内".into());
+    }
+
+    if !canonical_target_dir.is_dir() {
+        return Err("目标路径并不是有效的目录".into());
+    }
+
+    let Some(name) = canonical_source.file_name().and_then(|n| n.to_str()) else {
+        return Err("无法确定条目名称".into());
+    };
+
+    let destination = canonical_target_dir.join(name);
+
+    if destination.exists() {
+        return Err("目标目录已存在同名条目".into());
+    }
+
+    if canonical_source.is_dir() && destination.starts_with(&canonical_source) {
+        return Err("无法将文件夹复制到其自身或子目录中".into());
+    }
+
+    if let Err(err) = copy_entry_recursive(&canonical_source, &destination) {
+        if destination.exists() {
+            let _ = if destination.is_dir() {
+                fs::remove_dir_all(&destination)
+            } else {
+                fs::remove_file(&destination)
+            };
+        }
+        return Err(err);
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+fn move_project_entry(
+    app: tauri::AppHandle,
+    source_path: String,
+    target_directory_path: String,
+) -> Result<(), String> {
+    let projects_root = ensure_projects_dir(&app)?
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
+
+    let source = PathBuf::from(&source_path);
+    let canonical_source = source
+        .canonicalize()
+        .map_err(|e| format!("无法移动源路径: {e}"))?;
+
+    if !canonical_source.starts_with(&projects_root) {
+        return Err("源路径不在受信目录内".into());
+    }
+
+    let target_dir = PathBuf::from(&target_directory_path);
+    let canonical_target_dir = target_dir
+        .canonicalize()
+        .map_err(|e| format!("无法访问目标目录: {e}"))?;
+
+    if !canonical_target_dir.starts_with(&projects_root) {
+        return Err("目标路径不在受信目录内".into());
+    }
+
+    if !canonical_target_dir.is_dir() {
+        return Err("目标路径并不是有效的目录".into());
+    }
+
+    let Some(name) = canonical_source.file_name().and_then(|n| n.to_str()) else {
+        return Err("无法确定条目名称".into());
+    };
+
+    let destination = canonical_target_dir.join(name);
+
+    if destination == canonical_source {
+        return Ok(());
+    }
+
+    if destination.exists() {
+        return Err("目标目录已存在同名条目".into());
+    }
+
+    if canonical_source.is_dir() && destination.starts_with(&canonical_source) {
+        return Err("无法将文件夹移动到其自身或子目录中".into());
+    }
+
+    match fs::rename(&canonical_source, &destination) {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            if !is_cross_device_error(&err) {
+                return Err(format!("移动失败: {err}"));
+            }
+
+            // 跨设备移动，降级为复制 + 删除
+            if let Err(copy_err) = copy_entry_recursive(&canonical_source, &destination) {
+                if destination.exists() {
+                    let _ = if destination.is_dir() {
+                        fs::remove_dir_all(&destination)
+                    } else {
+                        fs::remove_file(&destination)
+                    };
+                }
+                return Err(copy_err);
+            }
+
+            if canonical_source.is_dir() {
+                fs::remove_dir_all(&canonical_source)
+                    .map_err(|e| format!("删除源目录失败: {e}"))?;
+            } else {
+                fs::remove_file(&canonical_source).map_err(|e| format!("删除源文件失败: {e}"))?;
+            }
+
+            Ok(())
+        }
+    }
 }
 
 #[tauri::command]
@@ -448,6 +705,10 @@ pub fn run() {
             read_project_file,
             save_project_file,
             create_project_entry,
+            delete_project_entry,
+            rename_project_entry,
+            copy_project_entry,
+            move_project_entry,
             resolve_preview_entry,
             create_project
         ])

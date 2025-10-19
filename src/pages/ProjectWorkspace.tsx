@@ -1,5 +1,5 @@
 import type React from "react";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { css } from "@codemirror/lang-css";
@@ -16,181 +16,42 @@ import {
   ArrowRight,
   ChevronDown,
   ChevronRight,
-  FileText,
-  Folder,
   Home,
   Menu,
-  Pencil,
   Plus,
-  Trash2,
   X,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { FileNode, ProjectEntry } from "@/types/project";
+
+import { CreateEntryDialog } from "./project-workspace/CreateEntryDialog";
+import { EntryActionDialog } from "./project-workspace/EntryActionDialog";
+import { ExplorerColumns } from "./project-workspace/ExplorerColumns";
+import {
+  BOTTOM_TABS,
+  COLUMN_IDS,
+  type BottomTabId,
+  type ColumnId,
+  type ColumnState,
+  type CreateEntryType,
+} from "./project-workspace/types";
+import {
+  cloneColumnState,
+  createColumnState,
+  findFolderNode,
+  getDirectoryEntries,
+  getDisplayPath,
+  getParentDirectoryPath,
+  isPathWithin,
+  joinFsPath,
+  normalizeForCompare,
+} from "./project-workspace/fs-utils";
 
 const DEFAULT_EXPANDED_HEIGHT = 420;
 const MIN_SHEET_HEIGHT = 180;
 const COLLAPSED_HEIGHT = 76;
-
-type BottomTabId = "files" | "preview";
-type CreateEntryType = "file" | "folder";
-type ColumnId = "left" | "right";
-
-type ColumnState = {
-  directoryPath: string;
-  stack: string[];
-  lastVisitedChildPath: string | null;
-  lastVisitedChildParentPath: string | null;
-};
-
-const BOTTOM_TABS: Array<{ id: BottomTabId; label: string }> = [
-  { id: "files", label: "文件管理" },
-  { id: "preview", label: "实时预览" },
-];
-
-const COLUMN_IDS: ColumnId[] = ["left", "right"];
-
-const normalizeFsPath = (value: string): string => {
-  if (!value) {
-    return "";
-  }
-  const withoutUnc = value.startsWith("\\\\?\\") ? value.slice(4) : value;
-  const normalizedSlashes = withoutUnc.replace(/\\/g, "/");
-  return normalizedSlashes.replace(/\/+$/, "");
-};
-
-const getDisplayPath = (directoryPath: string, projectPath: string): string => {
-  const current = normalizeFsPath(directoryPath);
-  const project = normalizeFsPath(projectPath);
-
-  if (current.toLowerCase() === project.toLowerCase()) {
-    return "./";
-  }
-
-  if (current.toLowerCase().startsWith(project.toLowerCase())) {
-    const relative = current.slice(project.length).replace(/^\/+/, "");
-    return relative.length ? `./${relative}` : "./";
-  }
-
-  return current || "./";
-};
-
-const normalizeForCompare = (value: string): string => normalizeFsPath(value).toLowerCase();
-
-const createColumnState = (directoryPath: string): ColumnState => ({
-  directoryPath,
-  stack: [],
-  lastVisitedChildPath: null,
-  lastVisitedChildParentPath: null,
-});
-
-const cloneColumnState = (state: ColumnState): ColumnState => ({
-  directoryPath: state.directoryPath,
-  stack: [...state.stack],
-  lastVisitedChildPath: state.lastVisitedChildPath,
-  lastVisitedChildParentPath: state.lastVisitedChildParentPath,
-});
-
-const getParentDirectoryPath = (path: string): string => {
-  if (!path) {
-    return "";
-  }
-  const trimmed = path.replace(/[\\/]+$/, "");
-  const lastBackslash = trimmed.lastIndexOf("\\");
-  const lastSlash = trimmed.lastIndexOf("/");
-  const index = Math.max(lastBackslash, lastSlash);
-  if (index === -1) {
-    return "";
-  }
-  return trimmed.slice(0, index);
-};
-
-const joinFsPath = (directoryPath: string, childName: string): string => {
-  if (!directoryPath) {
-    return childName;
-  }
-  const lastChar = directoryPath.charAt(directoryPath.length - 1);
-  if (lastChar === "/" || lastChar === "\\") {
-    return `${directoryPath}${childName}`;
-  }
-  const separator = directoryPath.includes("\\") && !directoryPath.includes("/") ? "\\" : "/";
-  return `${directoryPath}${separator}${childName}`;
-};
-
-const isPathWithin = (path: string, directoryPath: string): boolean => {
-  if (!path || !directoryPath) {
-    return false;
-  }
-  const target = normalizeForCompare(path);
-  const parent = normalizeForCompare(directoryPath);
-  if (!target || !parent) {
-    return false;
-  }
-  if (target === parent) {
-    return true;
-  }
-  return target.startsWith(`${parent}/`);
-};
-
-const sortNodesByName = (nodes: FileNode[]): FileNode[] => {
-  return [...nodes].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
-};
-
-const findFolderNode = (nodes: FileNode[], targetPath: string): FileNode | null => {
-  const targetNormalized = normalizeForCompare(targetPath);
-
-  const walk = (list: FileNode[]): FileNode | null => {
-    for (const node of list) {
-      if (node.type !== "folder") {
-        continue;
-      }
-      if (normalizeForCompare(node.path) === targetNormalized) {
-        return node;
-      }
-      if (node.children?.length) {
-        const match = walk(node.children);
-        if (match) {
-          return match;
-        }
-      }
-    }
-    return null;
-  };
-
-  return walk(nodes);
-};
-
-const getDirectoryEntries = (tree: FileNode[], directoryPath: string, projectPath: string): FileNode[] => {
-  if (!tree.length) {
-    return [];
-  }
-
-  const projectNormalized = normalizeForCompare(projectPath);
-  const directoryNormalized = normalizeForCompare(directoryPath);
-
-  if (directoryNormalized === projectNormalized) {
-    return sortNodesByName(tree);
-  }
-
-  const folderNode = findFolderNode(tree, directoryPath);
-  if (!folderNode?.children?.length) {
-    return [];
-  }
-
-  return sortNodesByName(folderNode.children);
-};
 
 type ProjectWorkspaceProps = {
   project: ProjectEntry;
@@ -332,6 +193,24 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
     },
     [cancelLongPress, openEntryActionDialog],
   );
+
+  const handleStartRenameEntryAction = useCallback(() => {
+    if (!entryActionContext || isProcessingEntryAction) {
+      return;
+    }
+    setPendingEntryAction("rename");
+    setRenameEntryName(entryActionContext.node.name);
+    setEntryActionError(null);
+  }, [entryActionContext, isProcessingEntryAction]);
+
+  const handleCancelRenameEntryAction = useCallback(() => {
+    if (!entryActionContext || isProcessingEntryAction) {
+      return;
+    }
+    setPendingEntryAction(null);
+    setEntryActionError(null);
+    setRenameEntryName(entryActionContext.node.name);
+  }, [entryActionContext, isProcessingEntryAction]);
 
   useEffect(() => {
     if (entryActionContext) {
@@ -1443,101 +1322,19 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
                     <p>使用底部加号即可创建新文件或文件夹。</p>
                   </div>
                 ) : (
-                  <Card className="flex h-full overflow-hidden">
-                    {columnOrder.map((columnId, index) => {
-                      const data = columnComputed[columnId];
-                      const isColumnActive = activeColumn === columnId;
-                      const columnView = data.view;
-                      const columnCanGoUp =
-                        normalizeForCompare(columnView.directoryPath) !== normalizedProjectPath ||
-                        columnView.stack.length > 0;
-                      return (
-                        <Fragment key={columnId}>
-                          {index > 0 && (
-                            <div className="w-px bg-border" />
-                          )}
-                          <div
-                            className={cn(
-                              "flex min-w-0 flex-1 flex-col gap-2 py-3 px-4 transition",
-                              isColumnActive
-                                ? "bg-primary/5"
-                                : "hover:bg-muted/10",
-                            )}
-                            onMouseDown={() => setActiveColumn(columnId)}
-                          >
-                          <div className="no-scrollbar flex-1 overflow-y-auto">
-                            <div className="divide-y divide-border">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (!columnCanGoUp) {
-                                    return;
-                                  }
-                                  setActiveColumn(columnId);
-                                  goToParentDirectoryForColumn(columnId);
-                                }}
-                                disabled={!columnCanGoUp}
-                                className={cn(
-                                  "flex w-full items-center justify-between gap-3 pr-3 pl-0 py-3 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                                  columnCanGoUp
-                                    ? "hover:bg-muted"
-                                    : "cursor-not-allowed text-muted-foreground opacity-60",
-                                )}
-                              >
-                                <span className="flex flex-1 items-center gap-3">
-                                  <Folder
-                                    className={cn(
-                                      "h-4 w-4",
-                                      columnCanGoUp ? "text-primary" : "text-muted-foreground",
-                                    )}
-                                    aria-hidden
-                                  />
-                                  <span className="truncate font-medium text-foreground">..</span>
-                                </span>
-                                <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden />
-                              </button>
-                              {data.nodes.length === 0 ? (
-                                <div className="px-3 py-3 text-xs text-muted-foreground">该目录为空</div>
-                              ) : (
-                                data.nodes.map((node) => {
-                                  const isActiveFile = node.type === "file" && node.path === activeFilePath;
-                                  return (
-                                    <button
-                                      key={node.path}
-                                      type="button"
-                                      onClick={(event) => handleEntryClick(event, columnId, node)}
-                                      onPointerDown={(event) => handleEntryPointerDown(event, columnId, node)}
-                                      onPointerUp={handleEntryPointerUp}
-                                      onPointerCancel={handleEntryPointerUp}
-                                      onPointerLeave={handleEntryPointerUp}
-                                      onContextMenu={(event) => handleEntryContextMenu(event, columnId, node)}
-                                      className={cn(
-                                        "flex w-full items-center justify-between gap-3 pr-3 pl-0 py-3 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                                        isActiveFile ? "bg-primary/10 text-primary" : "hover:bg-muted",
-                                      )}
-                                    >
-                                      <span className="flex flex-1 items-center gap-3">
-                                        {node.type === "folder" ? (
-                                          <Folder className="h-4 w-4 text-primary" aria-hidden />
-                                        ) : (
-                                          <FileText className="h-4 w-4 text-muted-foreground" aria-hidden />
-                                        )}
-                                        <span className="truncate font-medium text-foreground">{node.name}</span>
-                                      </span>
-                                      {node.type === "folder" ? (
-                                        <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden />
-                                      ) : null}
-                                    </button>
-                                  );
-                                })
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        </Fragment>
-                      );
-                    })}
-                  </Card>
+                  <ExplorerColumns
+                    columnOrder={columnOrder}
+                    columnComputed={columnComputed}
+                    activeColumn={activeColumn}
+                    activeFilePath={activeFilePath}
+                    normalizedProjectPath={normalizedProjectPath}
+                    onColumnFocus={setActiveColumn}
+                    onGoToParent={goToParentDirectoryForColumn}
+                    onEntryClick={handleEntryClick}
+                    onEntryPointerDown={handleEntryPointerDown}
+                    onEntryPointerUp={handleEntryPointerUp}
+                    onEntryContextMenu={handleEntryContextMenu}
+                  />
                 )}
               </div>
               <div className="px-2 pt-2">
@@ -1614,191 +1411,35 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
           )}
         </div>
       </section>
-      <Dialog open={isEntryActionDialogOpen} onOpenChange={handleEntryActionDialogOpenChange}>
-        <DialogContent className="max-w-sm" showCloseButton={!isProcessingEntryAction}>
-          {entryActionContext
-            ? (() => {
-                const targetColumn: ColumnId = entryActionContext.columnId === "left" ? "right" : "left";
-                const targetDirectoryPath = columnViews[targetColumn]?.directoryPath ?? projectPath;
-                const targetDirectoryDisplay = getDisplayPath(targetDirectoryPath, projectPath);
-                const entryLabel = entryActionContext.node.type === "folder" ? "文件夹" : "文件";
-
-                if (pendingEntryAction === "rename") {
-                  return (
-                    <div className="space-y-5">
-                      <DialogHeader className="items-center text-center">
-                        <DialogTitle className="text-lg font-semibold">重命名</DialogTitle>
-                        <DialogDescription className="text-sm">
-                          当前{entryLabel}：
-                          <span className="ml-1 font-medium text-foreground">{entryActionContext.node.name}</span>
-                        </DialogDescription>
-                      </DialogHeader>
-                      <form className="space-y-5" onSubmit={handleRenameEntrySubmit}>
-                        <Input
-                          value={renameEntryName}
-                          onChange={(event) => setRenameEntryName(event.target.value)}
-                          disabled={isProcessingEntryAction}
-                          autoFocus
-                        />
-                        {entryActionError ? (
-                          <p className="text-sm text-destructive">{entryActionError}</p>
-                        ) : null}
-                        <DialogFooter>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={() => {
-                              if (!isProcessingEntryAction) {
-                                setPendingEntryAction(null);
-                                setEntryActionError(null);
-                                setRenameEntryName(entryActionContext.node.name);
-                              }
-                            }}
-                            disabled={isProcessingEntryAction}
-                          >
-                            返回
-                          </Button>
-                          <Button type="submit" disabled={isProcessingEntryAction}>
-                            {isProcessingEntryAction ? "提交中…" : "确认重命名"}
-                          </Button>
-                        </DialogFooter>
-                      </form>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div className="space-y-5">
-                    <DialogHeader className="items-center text-center">
-                      <DialogTitle className="text-lg font-semibold">选择操作</DialogTitle>
-                      <DialogDescription className="text-sm">
-                        {entryLabel}：
-                        <span className="ml-1 font-medium text-foreground">{entryActionContext.node.name}</span>
-                      </DialogDescription>
-                    </DialogHeader>
-                    {entryActionError ? (
-                      <p className="text-sm text-destructive">{entryActionError}</p>
-                    ) : null}
-                    {(() => {
-                      const ArrowIcon = entryActionContext.columnId === "left" ? ArrowRight : ArrowLeft;
-                      const arrowLabel = entryActionContext.columnId === "left" ? "→" : "←";
-
-                      return (
-                        <div className="grid grid-cols-2 gap-3">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={() => {
-                              setPendingEntryAction("rename");
-                              setRenameEntryName(entryActionContext.node.name);
-                              setEntryActionError(null);
-                            }}
-                            disabled={isProcessingEntryAction}
-                            className="h-20 flex-col items-start justify-center gap-1 rounded-xl border bg-accent/40 px-4 text-left text-sm font-semibold shadow-sm transition hover:bg-accent"
-                          >
-                            <Pencil className="h-5 w-5 text-muted-foreground" />
-                            <span>重命名</span>
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={() => handleCopyOrMove("copy")}
-                            disabled={isProcessingEntryAction}
-                            className="h-20 flex-col items-start justify-center gap-1 rounded-xl border bg-accent/40 px-4 text-left text-sm font-semibold shadow-sm transition hover:bg-accent"
-                          >
-                            <ArrowIcon className="h-5 w-5 text-muted-foreground" />
-                            <span>复制&nbsp;{arrowLabel}</span>
-                            <span className="text-xs font-normal text-muted-foreground">目标：{targetDirectoryDisplay}</span>
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={() => handleCopyOrMove("move")}
-                            disabled={isProcessingEntryAction}
-                            className="h-20 flex-col items-start justify-center gap-1 rounded-xl border bg-accent/40 px-4 text-left text-sm font-semibold shadow-sm transition hover:bg-accent"
-                          >
-                            <ArrowIcon className="h-5 w-5 text-muted-foreground" />
-                            <span>移动&nbsp;{arrowLabel}</span>
-                            <span className="text-xs font-normal text-muted-foreground">目标：{targetDirectoryDisplay}</span>
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={handleDeleteEntry}
-                            disabled={isProcessingEntryAction}
-                            className="h-20 flex-col items-start justify-center gap-1 rounded-xl border border-destructive/50 bg-destructive/5 px-4 text-left text-sm font-semibold text-destructive shadow-sm transition hover:bg-destructive/10"
-                          >
-                            <Trash2 className="h-5 w-5" />
-                            <span>删除</span>
-                          </Button>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                );
-              })()
-            : null}
-        </DialogContent>
-      </Dialog>
-      <Dialog open={isCreateEntryDialogOpen} onOpenChange={handleCreateDialogOpenChange}>
-        <DialogContent className="max-w-md" showCloseButton={!isCreatingEntry}>
-          <DialogHeader>
-            <DialogTitle>新建文件或文件夹</DialogTitle>
-            <DialogDescription>
-              将在当前目录 <span className="font-medium text-foreground">{activeDirectoryDisplayPath}</span>
-              内创建新条目。
-            </DialogDescription>
-          </DialogHeader>
-          <form className="space-y-5" onSubmit={handleCreateEntrySubmit}>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant={createEntryType === "file" ? "default" : "outline"}
-                onClick={() => setCreateEntryType("file")}
-                disabled={isCreatingEntry}
-              >
-                新建文件
-              </Button>
-              <Button
-                type="button"
-                variant={createEntryType === "folder" ? "default" : "outline"}
-                onClick={() => setCreateEntryType("folder")}
-                disabled={isCreatingEntry}
-              >
-                新建文件夹
-              </Button>
-            </div>
-            <div className="space-y-2">
-              <Input
-                value={createEntryName}
-                onChange={(event) => setCreateEntryName(event.target.value)}
-                placeholder={createEntryType === "file" ? "例如：index.html" : "例如：assets"}
-                autoFocus
-                disabled={isCreatingEntry}
-              />
-              {createEntryError ? (
-                <p className="text-sm text-destructive">{createEntryError}</p>
-              ) : null}
-            </div>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => handleCreateDialogOpenChange(false)}
-                disabled={isCreatingEntry}
-              >
-                取消
-              </Button>
-              <Button
-                type="submit"
-                disabled={isCreatingEntry || createEntryName.trim().length === 0}
-              >
-                {isCreatingEntry ? "创建中…" : "确认创建"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <EntryActionDialog
+        open={isEntryActionDialogOpen}
+        context={entryActionContext}
+        pendingAction={pendingEntryAction}
+        isProcessing={isProcessingEntryAction}
+        error={entryActionError}
+        renameEntryName={renameEntryName}
+        columnViews={columnViews}
+        projectPath={projectPath}
+        onOpenChange={handleEntryActionDialogOpenChange}
+        onRenameNameChange={setRenameEntryName}
+        onStartRename={handleStartRenameEntryAction}
+        onCancelRename={handleCancelRenameEntryAction}
+        onSubmitRename={handleRenameEntrySubmit}
+        onCopyOrMove={handleCopyOrMove}
+        onDelete={handleDeleteEntry}
+      />
+      <CreateEntryDialog
+        open={isCreateEntryDialogOpen}
+        activeDirectoryDisplayPath={activeDirectoryDisplayPath}
+        entryType={createEntryType}
+        entryName={createEntryName}
+        isProcessing={isCreatingEntry}
+        error={createEntryError}
+        onOpenChange={handleCreateDialogOpenChange}
+        onTypeChange={setCreateEntryType}
+        onNameChange={setCreateEntryName}
+        onSubmit={handleCreateEntrySubmit}
+      />
       </div>
     </div>
   );
