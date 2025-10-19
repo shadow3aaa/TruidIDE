@@ -152,6 +152,68 @@ fn save_project_file(
     Ok(())
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum NewEntryKind {
+    File,
+    Folder,
+}
+
+#[tauri::command]
+fn create_project_entry(
+    app: tauri::AppHandle,
+    parent_path: String,
+    name: String,
+    kind: NewEntryKind,
+) -> Result<(), String> {
+    let projects_root = ensure_projects_dir(&app)?
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
+
+    let parent = PathBuf::from(parent_path);
+    let canonical_parent = parent
+        .canonicalize()
+        .map_err(|e| format!("无法访问目标目录: {e}"))?;
+
+    if !canonical_parent.starts_with(&projects_root) {
+        return Err("目标路径不在受信目录内".into());
+    }
+
+    if !canonical_parent.is_dir() {
+        return Err("目标并不是有效的目录".into());
+    }
+
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err("名称不能为空".into());
+    }
+
+    if trimmed == "." || trimmed == ".." {
+        return Err("名称不可为 . 或 ..".into());
+    }
+
+    let invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
+    if trimmed.chars().any(|ch| invalid_chars.contains(&ch)) {
+        return Err("名称包含不允许的字符".into());
+    }
+
+    let target_path = canonical_parent.join(trimmed);
+    if target_path.exists() {
+        return Err("同名文件或目录已存在".into());
+    }
+
+    match kind {
+        NewEntryKind::Folder => {
+            fs::create_dir(&target_path).map_err(|e| format!("创建文件夹失败: {e}"))?;
+        }
+        NewEntryKind::File => {
+            File::create(&target_path).map_err(|e| format!("创建文件失败: {e}"))?;
+        }
+    }
+
+    Ok(())
+}
+
 #[tauri::command]
 fn resolve_preview_entry(app: tauri::AppHandle, project_path: String) -> Result<String, String> {
     let projects_root = ensure_projects_dir(&app)?
@@ -385,6 +447,7 @@ pub fn run() {
             list_project_tree,
             read_project_file,
             save_project_file,
+            create_project_entry,
             resolve_preview_entry,
             create_project
         ])
