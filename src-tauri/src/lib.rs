@@ -656,6 +656,8 @@ fn create_project(
       h1 { margin-top: 0; font-size: 2rem; }
       p { color: #475569; }
       code { background: #e2e8f0; padding: 0.25rem 0.5rem; border-radius: 6px; }
+      button { margin-top: 1.5rem; padding: 0.75rem 1.5rem; font-size: 1rem; color: #fff; background-color: #007bff; border: none; border-radius: 6px; cursor: pointer; }
+      button:hover { background-color: #0056b3; }
     </style>
   </head>
   <body>
@@ -664,7 +666,51 @@ fn create_project(
       <p>这是通过 TruidIDE 创建的示例项目。您可以在此目录中添加静态资源或接入框架构建流程。</p>
       <p><strong>预览提示：</strong> 将您的 web 构建产物放在该目录下，TruidIDE 将在安卓设备上提供预览和打包能力。</p>
       <p><strong>入口文件：</strong> <code>index.html</code></p>
+      <button onclick="showToast()">显示 Toast</button>
     </main>
+
+    <script>
+      (() => {
+        const promises = new Map();
+        let seq = 0;
+
+        window.addEventListener('message', (event) => {
+          if (event.source !== window.parent) return;
+          const { id, ...data } = event.data;
+          if (promises.has(id)) {
+            const [resolve, reject] = promises.get(id);
+            if (data.error) {
+              reject(data.error);
+            } else {
+              resolve(data.payload);
+            }
+            promises.delete(id);
+          }
+        });
+
+        function invoke(cmd, args) {
+          return new Promise((resolve, reject) => {
+            const id = seq++;
+            promises.set(id, [resolve, reject]);
+            window.parent.postMessage({ id, cmd, args }, '*');
+          });
+        }
+
+        const truidApi = {
+          toast: (text) => invoke('plugin:toast|toast', { text }),
+        };
+
+        async function showToast() {
+          try {
+            await truidApi.toast('来自预览项目的问候！');
+          } catch (e) {
+            console.error(e);
+          }
+        }
+
+        window.showToast = showToast;
+      })();
+    </script>
   </body>
 </html>
 "#;
@@ -699,6 +745,7 @@ fn ensure_projects_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_toast::init())
         .invoke_handler(tauri::generate_handler![
             list_projects,
             list_project_tree,

@@ -37,3 +37,4 @@ function HomePage({ onOpenProjectDialog, onOpenCreateDialog }: HomePageProps) {
 }
 
 export default HomePage;
+

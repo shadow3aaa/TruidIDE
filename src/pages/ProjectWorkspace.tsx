@@ -15,7 +15,7 @@ import {
   ArrowLeftRight,
   ArrowRight,
   ChevronDown,
-  ChevronRight,
+  ChevronUp,
   Home,
   Menu,
   Plus,
@@ -50,9 +50,7 @@ import {
   normalizeForCompare,
 } from "./project-workspace/fs-utils";
 
-const DEFAULT_EXPANDED_HEIGHT = 420;
-const MIN_SHEET_HEIGHT = 180;
-const COLLAPSED_HEIGHT = 76;
+const COLLAPSED_HEIGHT = 56;
 
 type ProjectWorkspaceProps = {
   project: ProjectEntry;
@@ -64,16 +62,10 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
   const normalizedProjectPath = useMemo(() => normalizeForCompare(projectPath), [projectPath]);
 
   const [activeBottomTab, setActiveBottomTab] = useState<BottomTabId>("files");
-  const activeBottomTabRef = useRef<BottomTabId>("files");
 
   const [isSidebarOpen, setSidebarOpen] = useState(false);
 
-  const [isExplorerOpen, setExplorerOpen] = useState(true);
-  const [isExplorerFullscreen, setExplorerFullscreen] = useState(false);
-  const [isDraggingExplorer, setDraggingExplorer] = useState(false);
-  const [explorerHeight, setExplorerHeight] = useState(() => DEFAULT_EXPANDED_HEIGHT);
-  const explorerHandleRef = useRef<HTMLButtonElement | null>(null);
-  const dragStateRef = useRef<{ pointerId: number; startY: number; startHeight: number } | null>(null);
+  const [isExplorerOpen, setExplorerOpen] = useState(false);
 
   const [fileTreeVersion, setFileTreeVersion] = useState(0);
   const [fileTree, setFileTree] = useState<FileNode[]>([]);
@@ -128,6 +120,33 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
       cancelLongPress();
     };
   }, [cancelLongPress]);
+
+  useEffect(() => {
+    const handleMessage = async (event: MessageEvent) => {
+      if (event.source === window || !event.data || !('id' in event.data) || !('cmd' in event.data)) {
+        return;
+      }
+
+      const { id, cmd, args } = event.data;
+      const iframe = document.querySelector('iframe');
+      if (!iframe || event.source !== iframe.contentWindow) {
+        return;
+      }
+
+      try {
+        const payload = await invoke(cmd, args);
+        iframe.contentWindow?.postMessage({ id, payload }, '*');
+      } catch (error) {
+        iframe.contentWindow?.postMessage({ id, error }, '*');
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+
+    return () => {
+      window.removeEventListener('message', handleMessage);
+    };
+  }, []);
 
   const closeEntryActionDialog = useCallback(() => {
     setEntryActionDialogOpen(false);
@@ -219,12 +238,6 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
     }
   }, [entryActionContext]);
 
-  const clampExplorerHeight = useCallback((value: number) => {
-    const viewportHeight = window.innerHeight || 720;
-    const maxSheetHeight = Math.max(MIN_SHEET_HEIGHT, Math.floor(viewportHeight * 0.75));
-    return Math.min(Math.max(value, MIN_SHEET_HEIGHT), maxSheetHeight);
-  }, []);
-
   const requestPreviewReload = useCallback(() => {
     setPreviewReloadToken((token) => token + 1);
   }, []);
@@ -233,165 +246,11 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
     setFileTreeVersion((token) => token + 1);
   }, []);
 
-  const finalizeExplorerHeight = useCallback(
-    (height: number) => {
-      const viewportHeight = window.innerHeight || 720;
-      const fullscreenThreshold = Math.max(viewportHeight * 0.72, MIN_SHEET_HEIGHT + 60);
-      const collapseThreshold = MIN_SHEET_HEIGHT + 20;
-
-      if (height >= fullscreenThreshold) {
-        setExplorerFullscreen(true);
-        setExplorerOpen(true);
-        return viewportHeight;
-      }
-
-      if (height <= collapseThreshold) {
-        setExplorerFullscreen(false);
-        setExplorerOpen(false);
-        return COLLAPSED_HEIGHT;
-      }
-
-      setExplorerFullscreen(false);
-      setExplorerOpen(true);
-      return clampExplorerHeight(height);
-    },
-    [clampExplorerHeight],
-  );
-
-  const handleExplorerPointerMove = useCallback(
-    (event: PointerEvent) => {
-      const state = dragStateRef.current;
-      if (!state || state.pointerId !== event.pointerId) {
-        return;
-      }
-
-      const delta = state.startY - event.clientY;
-      const nextHeight = clampExplorerHeight(state.startHeight + delta);
-      setExplorerHeight(nextHeight);
-    },
-    [clampExplorerHeight],
-  );
-
-  const finishExplorerDrag = useCallback(
-    (event?: PointerEvent) => {
-      const state = dragStateRef.current;
-      if (!state || (event && state.pointerId !== event.pointerId)) {
-        return;
-      }
-
-      if (explorerHandleRef.current?.hasPointerCapture(state.pointerId)) {
-        explorerHandleRef.current.releasePointerCapture(state.pointerId);
-      }
-
-      dragStateRef.current = null;
-      setDraggingExplorer(false);
-
-      setExplorerHeight((currentHeight) => finalizeExplorerHeight(currentHeight));
-    },
-    [finalizeExplorerHeight],
-  );
-
-  const startExplorerDrag = useCallback(
-    (event: React.PointerEvent<HTMLButtonElement>) => {
-      if (event.button !== 0) {
-        return;
-      }
-
-      event.preventDefault();
-
-      const initialHeight = isExplorerOpen
-        ? explorerHeight
-        : clampExplorerHeight(DEFAULT_EXPANDED_HEIGHT);
-
-      dragStateRef.current = {
-        pointerId: event.pointerId,
-        startY: event.clientY,
-        startHeight: initialHeight,
-      };
-
-      setExplorerOpen(true);
-      setExplorerFullscreen(false);
-      setExplorerHeight(initialHeight);
-      setDraggingExplorer(true);
-
-      event.currentTarget.setPointerCapture(event.pointerId);
-    },
-    [clampExplorerHeight, explorerHeight, isExplorerOpen],
-  );
-
   const toggleExplorer = useCallback(() => {
-    if (isExplorerFullscreen) {
-      setExplorerFullscreen(false);
-      setExplorerHeight(clampExplorerHeight(DEFAULT_EXPANDED_HEIGHT));
-      return;
-    }
-
-    if (isExplorerOpen) {
-      setExplorerOpen(false);
-    } else {
-      setExplorerOpen(true);
-      setExplorerHeight(clampExplorerHeight(DEFAULT_EXPANDED_HEIGHT));
-    }
-  }, [clampExplorerHeight, isExplorerFullscreen, isExplorerOpen]);
-
-  useEffect(() => {
-    if (!isDraggingExplorer) {
-      return;
-    }
-
-    const handleMove = (event: PointerEvent) => {
-      handleExplorerPointerMove(event);
-    };
-
-    const handleUp = (event: PointerEvent) => {
-      finishExplorerDrag(event);
-    };
-
-    window.addEventListener("pointermove", handleMove);
-    window.addEventListener("pointerup", handleUp);
-    window.addEventListener("pointercancel", handleUp);
-
-    return () => {
-      window.removeEventListener("pointermove", handleMove);
-      window.removeEventListener("pointerup", handleUp);
-      window.removeEventListener("pointercancel", handleUp);
-    };
-  }, [finishExplorerDrag, handleExplorerPointerMove, isDraggingExplorer]);
-
-  useEffect(() => {
-    activeBottomTabRef.current = activeBottomTab;
-  }, [activeBottomTab]);
-
-  useEffect(() => {
-    if (!isExplorerOpen) {
-      setExplorerFullscreen(false);
-      setExplorerHeight(COLLAPSED_HEIGHT);
-    }
+    setExplorerOpen(!isExplorerOpen);
   }, [isExplorerOpen]);
 
-  useEffect(() => {
-    if (!isExplorerOpen || !isExplorerFullscreen) {
-      return;
-    }
 
-    const updateHeight = () => {
-      const viewportHeight = window.innerHeight || 720;
-      setExplorerHeight(viewportHeight);
-    };
-
-    updateHeight();
-    window.addEventListener("resize", updateHeight);
-    return () => {
-      window.removeEventListener("resize", updateHeight);
-    };
-  }, [isExplorerFullscreen, isExplorerOpen]);
-
-  useEffect(() => {
-    if (activeBottomTab !== "preview" && isExplorerFullscreen) {
-      setExplorerFullscreen(false);
-      setExplorerHeight(clampExplorerHeight(DEFAULT_EXPANDED_HEIGHT));
-    }
-  }, [activeBottomTab, clampExplorerHeight, isExplorerFullscreen]);
 
   useEffect(() => {
     setActiveFilePath(null);
@@ -404,8 +263,6 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
       saveTimerRef.current = null;
     }
     setExplorerOpen(true);
-    setExplorerFullscreen(false);
-    setExplorerHeight(clampExplorerHeight(DEFAULT_EXPANDED_HEIGHT));
     setActiveBottomTab("files");
     setPreviewUrl(null);
     setPreviewError(null);
@@ -416,7 +273,7 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
       right: createColumnState(projectPath),
     });
     setActiveColumn("left");
-  }, [projectPath, clampExplorerHeight]);
+  }, [projectPath]);
 
   const columnOrder = useMemo<ColumnId[]>(() => COLUMN_IDS, []);
 
@@ -1014,15 +871,6 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
     });
   }, [activeColumn, projectPath]);
   const isFilesTab = activeBottomTab === "files";
-  const bottomSheetHint = (() => {
-    if (activeBottomTab === "preview") {
-      if (isExplorerFullscreen) {
-        return "向下拖动可退出全屏预览";
-      }
-      return isExplorerOpen ? "上拉可扩大预览，再次上拉可进入全屏" : "上拉以查看实时预览";
-    }
-    return isExplorerOpen ? "拖拽顶边可调整高度" : "上拉以查看项目文件";
-  })();
 
   useEffect(() => {
     if (activeBottomTab !== "preview") {
@@ -1129,8 +977,9 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
           <h2 className="truncate text-sm font-semibold text-foreground">{project.name}</h2>
         </div>
 
-        <main className="flex flex-1 flex-col gap-6 px-4 py-6 sm:px-6 sm:py-8">
-          <section className="flex flex-1 flex-col gap-4">
+        <main className="flex-1 overflow-y-auto px-4 pt-6 pb-28 sm:px-6 sm:py-8">
+          <div className="mx-auto max-w-4xl">
+            <section className="flex flex-1 flex-col gap-4">
           <div className="flex flex-col gap-2 border-b border-border/60 pb-4">
             {activeFilePath ? (
               <p className="break-all text-xs text-muted-foreground">
@@ -1181,7 +1030,7 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
                       contents: value,
                     })
                       .then(() => {
-                        if (activeBottomTabRef.current === "preview") {
+                        if (activeBottomTab === "preview") {
                           requestPreviewReload();
                         }
                       })
@@ -1206,41 +1055,29 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
               </div>
             )}
           </div>
-          </section>
-        </main>
-
-        {isExplorerOpen && explorerHeight > COLLAPSED_HEIGHT + 24 ? (
+                      </section>
+                    </div>
+                  </main>
+        {isExplorerOpen && (
           <button
             type="button"
             aria-label="关闭底部面板"
             className="fixed inset-0 z-30 bg-background/70 backdrop-blur-sm"
             onClick={() => setExplorerOpen(false)}
           />
-        ) : null}
+        )}
 
         <section
           className={cn(
-            "fixed inset-x-0 bottom-0 z-40 flex flex-col rounded-t-2xl border border-b-0 border-border/60 bg-background/95 shadow-lg transition-[height] duration-300 ease-out supports-[backdrop-filter]:bg-background/70",
-            isExplorerOpen ? "" : "border-opacity-40",
+            "fixed inset-x-0 bottom-0 z-40 flex flex-col border-t border-border/60 bg-background/95 shadow-lg transition-[height] duration-300 ease-out supports-[backdrop-filter]:bg-background/70",
+            isExplorerOpen ? "h-full" : `h-[${COLLAPSED_HEIGHT}px]`,
           )}
-          style={{
-            height: isExplorerOpen ? explorerHeight : COLLAPSED_HEIGHT,
-          }}
           aria-expanded={isExplorerOpen}
         >
-        <div className="flex flex-col px-4 pt-3">
-          <button
-            ref={explorerHandleRef}
-            type="button"
-            aria-label={isExplorerOpen ? "拖动或收起底部面板" : "展开底部面板"}
-            onPointerDown={startExplorerDrag}
-            className="mx-auto mb-3 flex w-16 items-center justify-center rounded-full bg-muted py-1 text-muted-foreground transition-colors hover:bg-muted/80"
-          >
-            <span className="block h-1 w-12 rounded-full bg-muted-foreground/50" />
-          </button>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-              <div className="inline-flex items-center gap-1 rounded-full border bg-muted/60 p-1">
+        <div className="flex flex-col px-4 pt-2 pb-2">
+          {isExplorerOpen ? (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-1 rounded-full border bg-muted/60 p-1">
                 {BOTTOM_TABS.map((tab) => {
                   const isActive = activeBottomTab === tab.id;
                   return (
@@ -1260,150 +1097,165 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
                   );
                 })}
               </div>
-              <p className="text-xs text-muted-foreground sm:hidden">{bottomSheetHint}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              {isFilesTab ? (
-                <Button variant="outline" size="sm" onClick={refreshFileTree} disabled={isLoadingFileTree}>
-                  {isLoadingFileTree ? "刷新中…" : "刷新"}
-                </Button>
-              ) : (
+              <div className="flex items-center gap-2">
+                {isFilesTab ? (
+                  <Button variant="outline" size="sm" onClick={refreshFileTree} disabled={isLoadingFileTree}>
+                    {isLoadingFileTree ? "刷新中…" : "刷新"}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={requestPreviewReload}
+                    disabled={isLoadingPreview}
+                  >
+                    {isLoadingPreview ? "加载中…" : "刷新预览"}
+                  </Button>
+                )}
                 <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={requestPreviewReload}
-                  disabled={isLoadingPreview}
+                  variant="ghost"
+                  size="icon"
+                  className="flex-shrink-0"
+                  onClick={toggleExplorer}
                 >
-                  {isLoadingPreview ? "加载中…" : "刷新预览"}
+                  <ChevronDown className="h-5 w-5" />
                 </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                className="flex items-center gap-1"
-                onClick={toggleExplorer}
-              >
-                {isExplorerFullscreen ? "退出全屏" : isExplorerOpen ? "收起" : "展开"}
-                {isExplorerOpen ? (
-                  <ChevronDown className={cn("h-4 w-4", isDraggingExplorer && "animate-pulse")} aria-hidden />
-                ) : (
-                  <ChevronRight className="h-4 w-4" aria-hidden />
-                )}
-              </Button>
-            </div>
-          </div>
-          <p className="mt-2 hidden text-xs text-muted-foreground sm:block">{bottomSheetHint}</p>
-        </div>
-        <div className="relative flex-1 overflow-hidden px-4 pb-5 pt-4">
-          {isFilesTab ? (
-            <div className="flex h-full flex-col overflow-hidden">
-              <div className="px-2 pb-2 text-xs text-muted-foreground">
-                <span className="font-medium text-foreground">{activeDirectoryDisplayPath}</span>
-              </div>
-              <div className="flex-1 overflow-hidden px-2">
-                {isLoadingFileTree ? (
-                  <div className="flex h-full items-center justify-center px-6 text-sm text-muted-foreground">
-                    正在读取项目结构…
-                  </div>
-                ) : fileTreeError ? (
-                  <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-                    <p className="text-sm text-destructive">{fileTreeError}</p>
-                    <Button size="sm" variant="outline" onClick={refreshFileTree}>
-                      重试
-                    </Button>
-                  </div>
-                ) : fileTree.length === 0 ? (
-                  <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-sm text-muted-foreground">
-                    <p>项目中尚无文件或目录。</p>
-                    <p>使用底部加号即可创建新文件或文件夹。</p>
-                  </div>
-                ) : (
-                  <ExplorerColumns
-                    columnOrder={columnOrder}
-                    columnComputed={columnComputed}
-                    activeColumn={activeColumn}
-                    activeFilePath={activeFilePath}
-                    normalizedProjectPath={normalizedProjectPath}
-                    onColumnFocus={setActiveColumn}
-                    onGoToParent={goToParentDirectoryForColumn}
-                    onEntryClick={handleEntryClick}
-                    onEntryPointerDown={handleEntryPointerDown}
-                    onEntryPointerUp={handleEntryPointerUp}
-                    onEntryContextMenu={handleEntryContextMenu}
-                  />
-                )}
-              </div>
-              <div className="px-2 pt-2">
-                <div className="flex items-center justify-around">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={goToParentDirectory}
-                    disabled={!canGoToParent}
-                    aria-label="返回父目录"
-                  >
-                    <ArrowLeft className="h-5 w-5" aria-hidden />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={goToLastVisitedChildDirectory}
-                    disabled={!canGoToLastVisitedChild}
-                    aria-label="前往上次访问的子目录"
-                  >
-                    <ArrowRight className="h-5 w-5" aria-hidden />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={openCreateEntryDialog}
-                    aria-label="新建文件或文件夹"
-                  >
-                    <Plus className="h-5 w-5" aria-hidden />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleSwapColumns}
-                    aria-label="交换左右文件栏"
-                  >
-                    <ArrowLeftRight className="h-5 w-5" aria-hidden />
-                  </Button>
-                </div>
               </div>
             </div>
           ) : (
-            <div className="h-full overflow-hidden rounded-xl border bg-card shadow-sm">
-              {isLoadingPreview ? (
-                <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-sm text-muted-foreground">
-                  <p>正在生成预览…</p>
-                  <p>请稍候，预览加载完成后会自动刷新。</p>
-                </div>
-              ) : previewError ? (
-                <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center">
-                  <p className="text-sm text-destructive">{previewError}</p>
-                  <Button size="sm" variant="outline" onClick={requestPreviewReload}>
-                    重试
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-2">
+                {['[', ']', '{', '}', '(', ')', '<', '>', '=', '+', '-', '*', '/'].map((key) => (
+                  <Button key={key} variant="outline" size="sm" className="px-3">
+                    {key}
                   </Button>
+                ))}
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="flex-shrink-0"
+                onClick={toggleExplorer}
+              >
+                <ChevronUp className="h-5 w-5" />
+              </Button>
+            </div>
+          )}
+        </div>
+        <div className="relative flex-1 overflow-hidden px-4 pb-5 pt-4">
+          {isExplorerOpen && (
+            <>
+              {isFilesTab ? (
+                <div className="flex h-full flex-col overflow-hidden">
+                  <div className="px-2 pb-2 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">{activeDirectoryDisplayPath}</span>
+                  </div>
+                  <div className="flex-1 overflow-hidden px-2">
+                    {isLoadingFileTree ? (
+                      <div className="flex h-full items-center justify-center px-6 text-sm text-muted-foreground">
+                        正在读取项目结构…
+                      </div>
+                    ) : fileTreeError ? (
+                      <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+                        <p className="text-sm text-destructive">{fileTreeError}</p>
+                        <Button size="sm" variant="outline" onClick={refreshFileTree}>
+                          重试
+                        </Button>
+                      </div>
+                    ) : fileTree.length === 0 ? (
+                      <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-sm text-muted-foreground">
+                        <p>项目中尚无文件或目录。</p>
+                        <p>使用底部加号即可创建新文件或文件夹。</p>
+                      </div>
+                    ) : (
+                      <ExplorerColumns
+                        columnOrder={columnOrder}
+                        columnComputed={columnComputed}
+                        activeColumn={activeColumn}
+                        activeFilePath={activeFilePath}
+                        normalizedProjectPath={normalizedProjectPath}
+                        onColumnFocus={setActiveColumn}
+                        onGoToParent={goToParentDirectoryForColumn}
+                        onEntryClick={handleEntryClick}
+                        onEntryPointerDown={handleEntryPointerDown}
+                        onEntryPointerUp={handleEntryPointerUp}
+                        onEntryContextMenu={handleEntryContextMenu}
+                      />
+                    )}
+                  </div>
+                  <div className="px-2 pt-2">
+                    <div className="flex items-center justify-around">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={goToParentDirectory}
+                        disabled={!canGoToParent}
+                        aria-label="返回父目录"
+                      >
+                        <ArrowLeft className="h-5 w-5" aria-hidden />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={goToLastVisitedChildDirectory}
+                        disabled={!canGoToLastVisitedChild}
+                        aria-label="前往上次访问的子目录"
+                      >
+                        <ArrowRight className="h-5 w-5" aria-hidden />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={openCreateEntryDialog}
+                        aria-label="新建文件或文件夹"
+                      >
+                        <Plus className="h-5 w-5" aria-hidden />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleSwapColumns}
+                        aria-label="交换左右文件栏"
+                      >
+                        <ArrowLeftRight className="h-5 w-5" aria-hidden />
+                      </Button>
+                    </div>
+                  </div>
                 </div>
-              ) : previewUrl ? (
-                <iframe
-                  key={previewUrl}
-                  src={previewUrl}
-                  title="项目实时预览"
-                  className="h-full w-full border-0 bg-background"
-                />
               ) : (
-                <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-sm text-muted-foreground">
-                  <p>选择下方的“刷新预览”以加载项目效果。</p>
-                  <p>若项目尚未生成入口文件，请在项目目录中提供 index.html。</p>
+                <div className="h-full overflow-hidden rounded-xl border bg-card shadow-sm">
+                  {isLoadingPreview ? (
+                    <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-sm text-muted-foreground">
+                      <p>正在生成预览…</p>
+                      <p>请稍候，预览加载完成后会自动刷新。</p>
+                    </div>
+                  ) : previewError ? (
+                    <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center">
+                      <p className="text-sm text-destructive">{previewError}</p>
+                      <Button size="sm" variant="outline" onClick={requestPreviewReload}>
+                        重试
+                      </Button>
+                    </div>
+                  ) : previewUrl ? (
+                    <iframe
+                      key={previewUrl}
+                      src={previewUrl}
+                      title="项目实时预览"
+                      className="h-full w-full border-0 bg-background"
+                    />
+                  ) : (
+                    <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-sm text-muted-foreground">
+                      <p>选择下方的“刷新预览”以加载项目效果。</p>
+                      <p>若项目尚未生成入口文件，请在项目目录中提供 index.html。</p>
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
+            </>
           )}
         </div>
       </section>
