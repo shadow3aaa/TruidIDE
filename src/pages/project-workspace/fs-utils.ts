@@ -8,7 +8,17 @@ export const normalizeFsPath = (value: string): string => {
   }
   const withoutUnc = value.startsWith("\\\\?\\") ? value.slice(4) : value;
   const normalizedSlashes = withoutUnc.replace(/\\/g, "/");
-  return normalizedSlashes.replace(/\/+$/, "");
+  const trimmed = normalizedSlashes.replace(/\/+$/, "");
+
+  const aliasPrefix = "/data/user/0";
+  if (trimmed === aliasPrefix) {
+    return "/data/data";
+  }
+  if (trimmed.startsWith(`${aliasPrefix}/`)) {
+    return `/data/data/${trimmed.slice(aliasPrefix.length + 1)}`;
+  }
+
+  return trimmed;
 };
 
 export const getDisplayPath = (directoryPath: string, projectPath: string): string => {

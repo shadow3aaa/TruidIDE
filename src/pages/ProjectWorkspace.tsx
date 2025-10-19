@@ -46,6 +46,7 @@ import {
   getParentDirectoryPath,
   isPathWithin,
   joinFsPath,
+  normalizeFsPath,
   normalizeForCompare,
 } from "./project-workspace/fs-utils";
 
@@ -721,15 +722,10 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
       return null;
     }
 
-    const normalizePath = (value: string) => {
-      const withoutUnc = value.startsWith("\\\\?\\") ? value.slice(4) : value;
-      return withoutUnc.replace(/[\\/]+$/, "").replace(/\\+/g, "/");
-    };
+    const filePathNormalized = normalizeFsPath(activeFilePath);
+    const projectRootNormalized = normalizeFsPath(projectPath);
 
-    const filePathNormalized = normalizePath(activeFilePath);
-    const projectRootNormalized = normalizePath(projectPath);
-
-    if (filePathNormalized.toLowerCase().startsWith(projectRootNormalized.toLowerCase())) {
+    if (normalizeForCompare(filePathNormalized).startsWith(normalizeForCompare(projectRootNormalized))) {
       const relative = filePathNormalized.slice(projectRootNormalized.length).replace(/^\/+/, "");
       if (relative.length > 0) {
         return `./${relative}`;
