@@ -1,5 +1,5 @@
 import type React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { css } from "@codemirror/lang-css";
@@ -18,12 +18,16 @@ import {
   ChevronRight,
   FileText,
   Folder,
+  Home,
+  Menu,
   Pencil,
   Plus,
   Trash2,
+  X,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -58,6 +62,15 @@ const BOTTOM_TABS: Array<{ id: BottomTabId; label: string }> = [
 
 const COLUMN_IDS: ColumnId[] = ["left", "right"];
 
+const normalizeFsPath = (value: string): string => {
+  if (!value) {
+    return "";
+  }
+  const withoutUnc = value.startsWith("\\\\?\\") ? value.slice(4) : value;
+  const normalizedSlashes = withoutUnc.replace(/\\/g, "/");
+  return normalizedSlashes.replace(/\/+$/, "");
+};
+
 const getDisplayPath = (directoryPath: string, projectPath: string): string => {
   const current = normalizeFsPath(directoryPath);
   const project = normalizeFsPath(projectPath);
@@ -72,14 +85,6 @@ const getDisplayPath = (directoryPath: string, projectPath: string): string => {
   }
 
   return current || "./";
-};
-
-const normalizeFsPath = (value: string): string => {
-  if (!value) {
-    return "";
-  }
-  const withoutUnc = value.startsWith("\\\\?\\") ? value.slice(4) : value;
-  return withoutUnc.replace(/\\/g, "/").replace(/\/+$/, "");
 };
 
 const normalizeForCompare = (value: string): string => normalizeFsPath(value).toLowerCase();
@@ -198,6 +203,8 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
 
   const [activeBottomTab, setActiveBottomTab] = useState<BottomTabId>("files");
   const activeBottomTabRef = useRef<BottomTabId>("files");
+
+  const [isSidebarOpen, setSidebarOpen] = useState(false);
 
   const [isExplorerOpen, setExplorerOpen] = useState(true);
   const [isExplorerFullscreen, setExplorerFullscreen] = useState(false);
@@ -1187,20 +1194,68 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
   }, [activeBottomTab, previewReloadToken, projectPath]);
 
   return (
-    <div className="relative flex min-h-screen flex-col pb-40">
-      <header className="border-b bg-card/80 px-6 py-4 backdrop-blur">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight">{project.name}</h1>
-          </div>
-          <Button variant="secondary" onClick={onBackHome}>
-            返回首页
+    <div className="flex h-full overflow-hidden bg-background">
+      {/* 遮罩层 */}
+      {isSidebarOpen && (
+        <button
+          type="button"
+          className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-label="关闭侧边栏"
+        />
+      )}
+
+      {/* 抽屉式侧边栏 */}
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r bg-card px-5 py-6 text-sm text-muted-foreground shadow-lg transition-transform duration-300 ease-in-out lg:static lg:z-auto lg:shadow-none lg:translate-x-0",
+          isSidebarOpen ? "translate-x-0" : "-translate-x-full",
+        )}
+      >
+        <div className="flex items-center justify-between gap-2 border-b pb-4">
+          <h1 className="truncate text-lg font-semibold text-foreground">{project.name}</h1>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+            aria-label="关闭侧边栏"
+          >
+            <X className="h-4 w-4" />
           </Button>
         </div>
-      </header>
 
-      <main className="flex flex-1 flex-col gap-6 px-6 py-8">
-        <section className="flex flex-1 flex-col gap-4">
+        <nav className="mt-6 flex flex-col gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            className="justify-start gap-2"
+            onClick={onBackHome}
+          >
+            <Home className="h-4 w-4" />
+            主页
+          </Button>
+        </nav>
+      </aside>
+
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {/* 移动端顶栏菜单按钮 */}
+        <div className="flex items-center gap-2 border-b bg-card/50 px-4 py-3 backdrop-blur lg:hidden">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="打开侧边栏"
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+          <h2 className="truncate text-sm font-semibold text-foreground">{project.name}</h2>
+        </div>
+
+        <main className="flex flex-1 flex-col gap-6 px-4 py-6 sm:px-6 sm:py-8">
+          <section className="flex flex-1 flex-col gap-4">
           <div className="flex flex-col gap-2 border-b border-border/60 pb-4">
             {activeFilePath ? (
               <p className="break-all text-xs text-muted-foreground">
@@ -1276,28 +1331,28 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
               </div>
             )}
           </div>
-        </section>
-      </main>
+          </section>
+        </main>
 
-      {isExplorerOpen && explorerHeight > COLLAPSED_HEIGHT + 24 ? (
-        <button
-          type="button"
-          aria-label="关闭底部面板"
-          className="fixed inset-0 z-30 bg-background/70 backdrop-blur-sm"
-          onClick={() => setExplorerOpen(false)}
-        />
-      ) : null}
+        {isExplorerOpen && explorerHeight > COLLAPSED_HEIGHT + 24 ? (
+          <button
+            type="button"
+            aria-label="关闭底部面板"
+            className="fixed inset-0 z-30 bg-background/70 backdrop-blur-sm"
+            onClick={() => setExplorerOpen(false)}
+          />
+        ) : null}
 
-      <section
-        className={cn(
-          "fixed inset-x-0 bottom-0 z-40 flex flex-col rounded-t-2xl border border-b-0 border-border/60 bg-background/95 shadow-lg transition-[height] duration-300 ease-out supports-[backdrop-filter]:bg-background/70",
-          isExplorerOpen ? "" : "border-opacity-40",
-        )}
-        style={{
-          height: isExplorerOpen ? explorerHeight : COLLAPSED_HEIGHT,
-        }}
-        aria-expanded={isExplorerOpen}
-      >
+        <section
+          className={cn(
+            "fixed inset-x-0 bottom-0 z-40 flex flex-col rounded-t-2xl border border-b-0 border-border/60 bg-background/95 shadow-lg transition-[height] duration-300 ease-out supports-[backdrop-filter]:bg-background/70",
+            isExplorerOpen ? "" : "border-opacity-40",
+          )}
+          style={{
+            height: isExplorerOpen ? explorerHeight : COLLAPSED_HEIGHT,
+          }}
+          aria-expanded={isExplorerOpen}
+        >
         <div className="flex flex-col px-4 pt-3">
           <button
             ref={explorerHandleRef}
@@ -1388,8 +1443,8 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
                     <p>使用底部加号即可创建新文件或文件夹。</p>
                   </div>
                 ) : (
-                  <div className="flex h-full gap-3 overflow-hidden pb-3">
-                    {columnOrder.map((columnId) => {
+                  <Card className="flex h-full overflow-hidden">
+                    {columnOrder.map((columnId, index) => {
                       const data = columnComputed[columnId];
                       const isColumnActive = activeColumn === columnId;
                       const columnView = data.view;
@@ -1397,16 +1452,19 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
                         normalizeForCompare(columnView.directoryPath) !== normalizedProjectPath ||
                         columnView.stack.length > 0;
                       return (
-                        <div
-                          key={columnId}
-                          className={cn(
-                            "flex min-w-0 flex-1 flex-col gap-2 py-2 transition",
-                            isColumnActive
-                              ? "bg-primary/5 shadow-[0_8px_16px_-12px_rgba(37,99,235,0.45)]"
-                              : "hover:bg-muted/10",
+                        <Fragment key={columnId}>
+                          {index > 0 && (
+                            <div className="w-px bg-border" />
                           )}
-                          onMouseDown={() => setActiveColumn(columnId)}
-                        >
+                          <div
+                            className={cn(
+                              "flex min-w-0 flex-1 flex-col gap-2 py-3 px-4 transition",
+                              isColumnActive
+                                ? "bg-primary/5"
+                                : "hover:bg-muted/10",
+                            )}
+                            onMouseDown={() => setActiveColumn(columnId)}
+                          >
                           <div className="no-scrollbar flex-1 overflow-y-auto">
                             <div className="divide-y divide-border">
                               <button
@@ -1476,9 +1534,10 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
                             </div>
                           </div>
                         </div>
+                        </Fragment>
                       );
                     })}
-                  </div>
+                  </Card>
                 )}
               </div>
               <div className="px-2 pt-2">
@@ -1740,6 +1799,7 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
           </form>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }
