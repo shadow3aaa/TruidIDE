@@ -59,31 +59,50 @@ export function EntryActionDialog({
       <DialogContent className="max-w-sm" showCloseButton={!isProcessing}>
         {context
           ? (() => {
-              const targetColumn: ColumnId = context.columnId === "left" ? "right" : "left";
-              const targetDirectoryPath = columnViews[targetColumn]?.directoryPath ?? projectPath;
-              const targetDirectoryDisplay = getDisplayPath(targetDirectoryPath, projectPath);
-              const entryLabel = context.node.type === "folder" ? "文件夹" : "文件";
+              const targetColumn: ColumnId =
+                context.columnId === "left" ? "right" : "left";
+              const targetDirectoryPath =
+                columnViews[targetColumn]?.directoryPath ?? projectPath;
+              const targetDirectoryDisplay = getDisplayPath(
+                targetDirectoryPath,
+                projectPath,
+              );
+              const entryLabel =
+                context.node.type === "folder" ? "文件夹" : "文件";
 
               if (pendingAction === "rename") {
                 return (
                   <div className="space-y-5">
                     <DialogHeader className="items-center text-center">
-                      <DialogTitle className="text-lg font-semibold">重命名</DialogTitle>
+                      <DialogTitle className="text-lg font-semibold">
+                        重命名
+                      </DialogTitle>
                       <DialogDescription className="text-sm">
                         当前{entryLabel}：
-                        <span className="ml-1 font-medium text-foreground">{context.node.name}</span>
+                        <span className="ml-1 font-medium text-foreground">
+                          {context.node.name}
+                        </span>
                       </DialogDescription>
                     </DialogHeader>
                     <form className="space-y-5" onSubmit={onSubmitRename}>
                       <Input
                         value={renameEntryName}
-                        onChange={(event) => onRenameNameChange(event.target.value)}
+                        onChange={(event) =>
+                          onRenameNameChange(event.target.value)
+                        }
                         disabled={isProcessing}
                         autoFocus
                       />
-                      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+                      {error ? (
+                        <p className="text-sm text-destructive">{error}</p>
+                      ) : null}
                       <DialogFooter>
-                        <Button type="button" variant="ghost" onClick={onCancelRename} disabled={isProcessing}>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={onCancelRename}
+                          disabled={isProcessing}
+                        >
                           返回
                         </Button>
                         <Button type="submit" disabled={isProcessing}>
@@ -98,15 +117,22 @@ export function EntryActionDialog({
               return (
                 <div className="space-y-5">
                   <DialogHeader className="items-center text-center">
-                    <DialogTitle className="text-lg font-semibold">选择操作</DialogTitle>
+                    <DialogTitle className="text-lg font-semibold">
+                      选择操作
+                    </DialogTitle>
                     <DialogDescription className="text-sm">
                       {entryLabel}：
-                      <span className="ml-1 font-medium text-foreground">{context.node.name}</span>
+                      <span className="ml-1 font-medium text-foreground">
+                        {context.node.name}
+                      </span>
                     </DialogDescription>
                   </DialogHeader>
-                  {error ? <p className="text-sm text-destructive">{error}</p> : null}
+                  {error ? (
+                    <p className="text-sm text-destructive">{error}</p>
+                  ) : null}
                   {(() => {
-                    const ArrowIcon = context.columnId === "left" ? ArrowRight : ArrowLeft;
+                    const ArrowIcon =
+                      context.columnId === "left" ? ArrowRight : ArrowLeft;
                     const arrowLabel = context.columnId === "left" ? "→" : "←";
 
                     return (
@@ -130,7 +156,9 @@ export function EntryActionDialog({
                         >
                           <ArrowIcon className="h-5 w-5 text-muted-foreground" />
                           <span>复制&nbsp;{arrowLabel}</span>
-                          <span className="text-xs font-normal text-muted-foreground">目标：{targetDirectoryDisplay}</span>
+                          <span className="text-xs font-normal text-muted-foreground">
+                            目标：{targetDirectoryDisplay}
+                          </span>
                         </Button>
                         <Button
                           type="button"
@@ -141,7 +169,9 @@ export function EntryActionDialog({
                         >
                           <ArrowIcon className="h-5 w-5 text-muted-foreground" />
                           <span>移动&nbsp;{arrowLabel}</span>
-                          <span className="text-xs font-normal text-muted-foreground">目标：{targetDirectoryDisplay}</span>
+                          <span className="text-xs font-normal text-muted-foreground">
+                            目标：{targetDirectoryDisplay}
+                          </span>
                         </Button>
                         <Button
                           type="button"

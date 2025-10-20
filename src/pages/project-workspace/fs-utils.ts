@@ -21,7 +21,10 @@ export const normalizeFsPath = (value: string): string => {
   return trimmed;
 };
 
-export const getDisplayPath = (directoryPath: string, projectPath: string): string => {
+export const getDisplayPath = (
+  directoryPath: string,
+  projectPath: string,
+): string => {
   const current = normalizeFsPath(directoryPath);
   const project = normalizeFsPath(projectPath);
 
@@ -37,7 +40,8 @@ export const getDisplayPath = (directoryPath: string, projectPath: string): stri
   return current || "./";
 };
 
-export const normalizeForCompare = (value: string): string => normalizeFsPath(value).toLowerCase();
+export const normalizeForCompare = (value: string): string =>
+  normalizeFsPath(value).toLowerCase();
 
 export const createColumnState = (directoryPath: string): ColumnState => ({
   directoryPath,
@@ -67,7 +71,10 @@ export const getParentDirectoryPath = (path: string): string => {
   return trimmed.slice(0, index);
 };
 
-export const joinFsPath = (directoryPath: string, childName: string): string => {
+export const joinFsPath = (
+  directoryPath: string,
+  childName: string,
+): string => {
   if (!directoryPath) {
     return childName;
   }
@@ -75,7 +82,8 @@ export const joinFsPath = (directoryPath: string, childName: string): string => 
   if (lastChar === "/" || lastChar === "\\") {
     return `${directoryPath}${childName}`;
   }
-  const separator = directoryPath.includes("\\") && !directoryPath.includes("/") ? "\\" : "/";
+  const separator =
+    directoryPath.includes("\\") && !directoryPath.includes("/") ? "\\" : "/";
   return `${directoryPath}${separator}${childName}`;
 };
 
@@ -95,10 +103,15 @@ export const isPathWithin = (path: string, directoryPath: string): boolean => {
 };
 
 const sortNodesByName = (nodes: FileNode[]): FileNode[] => {
-  return [...nodes].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+  return [...nodes].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
+  );
 };
 
-export const findFolderNode = (nodes: FileNode[], targetPath: string): FileNode | null => {
+export const findFolderNode = (
+  nodes: FileNode[],
+  targetPath: string,
+): FileNode | null => {
   const targetNormalized = normalizeForCompare(targetPath);
 
   const walk = (list: FileNode[]): FileNode | null => {
@@ -122,7 +135,11 @@ export const findFolderNode = (nodes: FileNode[], targetPath: string): FileNode 
   return walk(nodes);
 };
 
-export const getDirectoryEntries = (tree: FileNode[], directoryPath: string, projectPath: string): FileNode[] => {
+export const getDirectoryEntries = (
+  tree: FileNode[],
+  directoryPath: string,
+  projectPath: string,
+): FileNode[] => {
   if (!tree.length) {
     return [];
   }

@@ -44,7 +44,10 @@ export function CreateEntryDialog({
         <DialogHeader>
           <DialogTitle>新建文件或文件夹</DialogTitle>
           <DialogDescription>
-            将在当前目录 <span className="font-medium text-foreground">{activeDirectoryDisplayPath}</span>
+            将在当前目录{" "}
+            <span className="font-medium text-foreground">
+              {activeDirectoryDisplayPath}
+            </span>
             内创建新条目。
           </DialogDescription>
         </DialogHeader>
@@ -71,17 +74,27 @@ export function CreateEntryDialog({
             <Input
               value={entryName}
               onChange={(event) => onNameChange(event.target.value)}
-              placeholder={entryType === "file" ? "例如：index.html" : "例如：assets"}
+              placeholder={
+                entryType === "file" ? "例如：index.html" : "例如：assets"
+              }
               autoFocus
               disabled={isProcessing}
             />
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
           </div>
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={isProcessing}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => onOpenChange(false)}
+              disabled={isProcessing}
+            >
               取消
             </Button>
-            <Button type="submit" disabled={isProcessing || entryName.trim().length === 0}>
+            <Button
+              type="submit"
+              disabled={isProcessing || entryName.trim().length === 0}
+            >
               {isProcessing ? "创建中…" : "确认创建"}
             </Button>
           </DialogFooter>

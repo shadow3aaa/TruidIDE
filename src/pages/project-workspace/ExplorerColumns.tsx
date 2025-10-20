@@ -62,8 +62,8 @@ export function ExplorerColumns({
         const isColumnActive = activeColumn === columnId;
         const columnView = data.view;
         const columnCanGoUp =
-          normalizeForCompare(columnView.directoryPath) !== normalizedProjectPath ||
-          columnView.stack.length > 0;
+          normalizeForCompare(columnView.directoryPath) !==
+            normalizedProjectPath || columnView.stack.length > 0;
 
         return (
           <Fragment key={columnId}>
@@ -89,51 +89,82 @@ export function ExplorerColumns({
                     disabled={!columnCanGoUp}
                     className={cn(
                       "flex w-full items-center justify-between gap-3 pr-3 pl-0 py-3 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      columnCanGoUp ? "hover:bg-muted" : "cursor-not-allowed text-muted-foreground opacity-60",
+                      columnCanGoUp
+                        ? "hover:bg-muted"
+                        : "cursor-not-allowed text-muted-foreground opacity-60",
                     )}
                   >
                     <span className="flex flex-1 items-center gap-3">
                       <Folder
                         className={cn(
                           "h-4 w-4",
-                          columnCanGoUp ? "text-primary" : "text-muted-foreground",
+                          columnCanGoUp
+                            ? "text-primary"
+                            : "text-muted-foreground",
                         )}
                         aria-hidden
                       />
-                      <span className="truncate font-medium text-foreground">..</span>
+                      <span className="truncate font-medium text-foreground">
+                        ..
+                      </span>
                     </span>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden />
+                    <ChevronRight
+                      className="h-4 w-4 text-muted-foreground"
+                      aria-hidden
+                    />
                   </button>
                   {data.nodes.length === 0 ? (
-                    <div className="px-3 py-3 text-xs text-muted-foreground">该目录为空</div>
+                    <div className="px-3 py-3 text-xs text-muted-foreground">
+                      该目录为空
+                    </div>
                   ) : (
                     data.nodes.map((node) => {
-                      const isActiveFile = node.type === "file" && node.path === activeFilePath;
+                      const isActiveFile =
+                        node.type === "file" && node.path === activeFilePath;
                       return (
                         <button
                           key={node.path}
                           type="button"
-                          onClick={(event) => onEntryClick(event, columnId, node)}
-                          onPointerDown={(event) => onEntryPointerDown(event, columnId, node)}
+                          onClick={(event) =>
+                            onEntryClick(event, columnId, node)
+                          }
+                          onPointerDown={(event) =>
+                            onEntryPointerDown(event, columnId, node)
+                          }
                           onPointerUp={onEntryPointerUp}
                           onPointerCancel={onEntryPointerUp}
                           onPointerLeave={onEntryPointerUp}
-                          onContextMenu={(event) => onEntryContextMenu(event, columnId, node)}
+                          onContextMenu={(event) =>
+                            onEntryContextMenu(event, columnId, node)
+                          }
                           className={cn(
                             "flex w-full items-center justify-between gap-3 pr-3 pl-0 py-3 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                            isActiveFile ? "bg-primary/10 text-primary" : "hover:bg-muted",
+                            isActiveFile
+                              ? "bg-primary/10 text-primary"
+                              : "hover:bg-muted",
                           )}
                         >
                           <span className="flex flex-1 items-center gap-3">
                             {node.type === "folder" ? (
-                              <Folder className="h-4 w-4 text-primary" aria-hidden />
+                              <Folder
+                                className="h-4 w-4 text-primary"
+                                aria-hidden
+                              />
                             ) : (
-                              <FileText className="h-4 w-4 text-muted-foreground" aria-hidden />
+                              <FileText
+                                className="h-4 w-4 text-muted-foreground"
+                                aria-hidden
+                              />
                             )}
-                            <span className="truncate font-medium text-foreground">{node.name}</span>
+                            <span className="truncate font-medium text-foreground">
+                              {node.name}
+                            </span>
                           </span>
                           {node.type === "folder" ? (
-                            <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden />
+                            <ChevronRight
+                              className="h-4 w-4 text-muted-foreground"
+                              aria-hidden
+                            />
                           ) : null}
                         </button>
                       );

@@ -127,3 +127,29 @@
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* Ensure CodeMirror internal scroll elements also hide scrollbars but remain scrollable */
+.no-scrollbar,
+.no-scrollbar * {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+.no-scrollbar ::-webkit-scrollbar,
+.no-scrollbar *::-webkit-scrollbar {
+  display: none !important;
+}
+
+/* Specifically target CodeMirror scroller/content classes used by @uiw/react-codemirror */
+.no-scrollbar .cm-scroller,
+.no-scrollbar .cm-content,
+.no-scrollbar .cm-gutters {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+.no-scrollbar .cm-scroller::-webkit-scrollbar,
+.no-scrollbar .cm-content::-webkit-scrollbar,
+.no-scrollbar .cm-gutters::-webkit-scrollbar {
+  display: none !important;
+}

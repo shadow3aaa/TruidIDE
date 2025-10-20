@@ -48,7 +48,10 @@ type ProjectWorkspaceProps = {
 
 function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
   const projectPath = project.path;
-  const normalizedProjectPath = useMemo(() => normalizeForCompare(projectPath), [projectPath]);
+  const normalizedProjectPath = useMemo(
+    () => normalizeForCompare(projectPath),
+    [projectPath],
+  );
 
   const [activeBottomTab, setActiveBottomTab] = useState<BottomTabId>("files");
 
@@ -61,10 +64,12 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
   const [isLoadingFileTree, setIsLoadingFileTree] = useState(false);
   const [fileTreeError, setFileTreeError] = useState<string | null>(null);
 
-  const [columnViews, setColumnViews] = useState<Record<ColumnId, ColumnState>>(() => ({
-    left: createColumnState(projectPath),
-    right: createColumnState(projectPath),
-  }));
+  const [columnViews, setColumnViews] = useState<Record<ColumnId, ColumnState>>(
+    () => ({
+      left: createColumnState(projectPath),
+      right: createColumnState(projectPath),
+    }),
+  );
   const [activeColumn, setActiveColumn] = useState<ColumnId>("left");
 
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
@@ -80,17 +85,21 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
   const [previewReloadToken, setPreviewReloadToken] = useState(0);
 
   const [isCreateEntryDialogOpen, setCreateEntryDialogOpen] = useState(false);
-  const [createEntryType, setCreateEntryType] = useState<CreateEntryType>("file");
+  const [createEntryType, setCreateEntryType] =
+    useState<CreateEntryType>("file");
   const [createEntryName, setCreateEntryName] = useState("");
   const [createEntryError, setCreateEntryError] = useState<string | null>(null);
   const [isCreatingEntry, setCreatingEntry] = useState(false);
 
-  const [entryActionContext, setEntryActionContext] = useState<
-    { columnId: ColumnId; node: FileNode } | null
-  >(null);
+  const [entryActionContext, setEntryActionContext] = useState<{
+    columnId: ColumnId;
+    node: FileNode;
+  } | null>(null);
   const [isEntryActionDialogOpen, setEntryActionDialogOpen] = useState(false);
   const [entryActionError, setEntryActionError] = useState<string | null>(null);
-  const [pendingEntryAction, setPendingEntryAction] = useState<"rename" | null>(null);
+  const [pendingEntryAction, setPendingEntryAction] = useState<"rename" | null>(
+    null,
+  );
   const [renameEntryName, setRenameEntryName] = useState("");
   const [isProcessingEntryAction, setProcessingEntryAction] = useState(false);
 
@@ -112,28 +121,33 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
 
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
-      if (event.source === window || !event.data || !('id' in event.data) || !('cmd' in event.data)) {
+      if (
+        event.source === window ||
+        !event.data ||
+        !("id" in event.data) ||
+        !("cmd" in event.data)
+      ) {
         return;
       }
 
       const { id, cmd, args } = event.data;
-      const iframe = document.querySelector('iframe');
+      const iframe = document.querySelector("iframe");
       if (!iframe || event.source !== iframe.contentWindow) {
         return;
       }
 
       try {
         const payload = await invoke(cmd, args);
-        iframe.contentWindow?.postMessage({ id, payload }, '*');
+        iframe.contentWindow?.postMessage({ id, payload }, "*");
       } catch (error) {
-        iframe.contentWindow?.postMessage({ id, error }, '*');
+        iframe.contentWindow?.postMessage({ id, error }, "*");
       }
     };
 
-    window.addEventListener('message', handleMessage);
+    window.addEventListener("message", handleMessage);
 
     return () => {
-      window.removeEventListener('message', handleMessage);
+      window.removeEventListener("message", handleMessage);
     };
   }, []);
 
@@ -172,7 +186,11 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
   );
 
   const handleEntryPointerDown = useCallback(
-    (event: React.PointerEvent<HTMLButtonElement>, columnId: ColumnId, node: FileNode) => {
+    (
+      event: React.PointerEvent<HTMLButtonElement>,
+      columnId: ColumnId,
+      node: FileNode,
+    ) => {
       if (event.pointerType === "mouse" && event.button !== 0) {
         return;
       }
@@ -194,7 +212,11 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
   );
 
   const handleEntryContextMenu = useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>, columnId: ColumnId, node: FileNode) => {
+    (
+      event: React.MouseEvent<HTMLButtonElement>,
+      columnId: ColumnId,
+      node: FileNode,
+    ) => {
       event.preventDefault();
       cancelLongPress();
       longPressTriggeredRef.current = false;
@@ -239,8 +261,6 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
     setExplorerOpen(!isExplorerOpen);
   }, [isExplorerOpen]);
 
-
-
   useEffect(() => {
     setActiveFilePath(null);
     setFileContent("");
@@ -267,7 +287,10 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
   const columnOrder = useMemo<ColumnId[]>(() => COLUMN_IDS, []);
 
   const columnComputed = useMemo(() => {
-    const result: Record<ColumnId, { view: ColumnState; nodes: FileNode[]; displayPath: string }> = {
+    const result: Record<
+      ColumnId,
+      { view: ColumnState; nodes: FileNode[]; displayPath: string }
+    > = {
       left: {
         view: columnViews.left ?? createColumnState(projectPath),
         nodes: [],
@@ -282,7 +305,11 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
 
     for (const columnId of COLUMN_IDS) {
       const view = columnViews[columnId] ?? createColumnState(projectPath);
-      const nodes = getDirectoryEntries(fileTree, view.directoryPath, projectPath);
+      const nodes = getDirectoryEntries(
+        fileTree,
+        view.directoryPath,
+        projectPath,
+      );
       result[columnId] = {
         view,
         nodes,
@@ -384,10 +411,10 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
         return;
       }
 
-    setCreatingEntry(true);
-    setCreateEntryError(null);
+      setCreatingEntry(true);
+      setCreateEntryError(null);
 
-    const parentPath = activeDirectoryPath;
+      const parentPath = activeDirectoryPath;
 
       try {
         await invoke("create_project_entry", {
@@ -410,7 +437,14 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
         setCreatingEntry(false);
       }
     },
-    [activeDirectoryPath, createEntryName, createEntryType, isCreatingEntry, refreshFileTree, resetCreateEntryForm],
+    [
+      activeDirectoryPath,
+      createEntryName,
+      createEntryType,
+      isCreatingEntry,
+      refreshFileTree,
+      resetCreateEntryForm,
+    ],
   );
 
   useEffect(() => {
@@ -571,8 +605,14 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
     const filePathNormalized = normalizeFsPath(activeFilePath);
     const projectRootNormalized = normalizeFsPath(projectPath);
 
-    if (normalizeForCompare(filePathNormalized).startsWith(normalizeForCompare(projectRootNormalized))) {
-      const relative = filePathNormalized.slice(projectRootNormalized.length).replace(/^\/+/, "");
+    if (
+      normalizeForCompare(filePathNormalized).startsWith(
+        normalizeForCompare(projectRootNormalized),
+      )
+    ) {
+      const relative = filePathNormalized
+        .slice(projectRootNormalized.length)
+        .replace(/^\/+/, "");
       if (relative.length > 0) {
         return `./${relative}`;
       }
@@ -588,7 +628,8 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
         const currentView = prev[columnId] ?? createColumnState(projectPath);
         const currentPath = currentView.directoryPath;
         const isAtProjectRoot =
-          normalizeForCompare(currentPath) === normalizedProjectPath && currentView.stack.length === 0;
+          normalizeForCompare(currentPath) === normalizedProjectPath &&
+          currentView.stack.length === 0;
 
         if (isAtProjectRoot) {
           return prev;
@@ -684,7 +725,11 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
   );
 
   const handleEntryClick = useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>, columnId: ColumnId, node: FileNode) => {
+    (
+      event: React.MouseEvent<HTMLButtonElement>,
+      columnId: ColumnId,
+      node: FileNode,
+    ) => {
       if (longPressTriggeredRef.current) {
         longPressTriggeredRef.current = false;
         event.preventDefault();
@@ -712,11 +757,15 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
       if (entryActionContext.node.type === "file") {
         if (
           activeFilePath &&
-          normalizeForCompare(activeFilePath) === normalizeForCompare(entryActionContext.node.path)
+          normalizeForCompare(activeFilePath) ===
+            normalizeForCompare(entryActionContext.node.path)
         ) {
           setActiveFilePath(null);
         }
-      } else if (activeFilePath && isPathWithin(activeFilePath, entryActionContext.node.path)) {
+      } else if (
+        activeFilePath &&
+        isPathWithin(activeFilePath, entryActionContext.node.path)
+      ) {
         setActiveFilePath(null);
       }
 
@@ -733,7 +782,12 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
     } finally {
       setProcessingEntryAction(false);
     }
-  }, [activeFilePath, closeEntryActionDialog, entryActionContext, refreshFileTree]);
+  }, [
+    activeFilePath,
+    closeEntryActionDialog,
+    entryActionContext,
+    refreshFileTree,
+  ]);
 
   const handleRenameEntrySubmit = useCallback(
     async (event: React.FormEvent<HTMLFormElement>) => {
@@ -765,13 +819,19 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
         if (entryActionContext.node.type === "file") {
           if (
             activeFilePath &&
-            normalizeForCompare(activeFilePath) === normalizeForCompare(entryActionContext.node.path)
+            normalizeForCompare(activeFilePath) ===
+              normalizeForCompare(entryActionContext.node.path)
           ) {
-            const parentPath = getParentDirectoryPath(entryActionContext.node.path);
+            const parentPath = getParentDirectoryPath(
+              entryActionContext.node.path,
+            );
             const renamedPath = joinFsPath(parentPath, trimmed);
             setActiveFilePath(renamedPath);
           }
-        } else if (activeFilePath && isPathWithin(activeFilePath, entryActionContext.node.path)) {
+        } else if (
+          activeFilePath &&
+          isPathWithin(activeFilePath, entryActionContext.node.path)
+        ) {
           setActiveFilePath(null);
         }
 
@@ -789,7 +849,13 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
         setProcessingEntryAction(false);
       }
     },
-    [activeFilePath, closeEntryActionDialog, entryActionContext, refreshFileTree, renameEntryName],
+    [
+      activeFilePath,
+      closeEntryActionDialog,
+      entryActionContext,
+      refreshFileTree,
+      renameEntryName,
+    ],
   );
 
   const handleCopyOrMove = useCallback(
@@ -798,14 +864,17 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
         return;
       }
 
-      const otherColumn: ColumnId = entryActionContext.columnId === "left" ? "right" : "left";
-      const targetDirectoryPath = columnViews[otherColumn]?.directoryPath ?? projectPath;
+      const otherColumn: ColumnId =
+        entryActionContext.columnId === "left" ? "right" : "left";
+      const targetDirectoryPath =
+        columnViews[otherColumn]?.directoryPath ?? projectPath;
 
       setProcessingEntryAction(true);
       setEntryActionError(null);
 
       try {
-        const command = mode === "copy" ? "copy_project_entry" : "move_project_entry";
+        const command =
+          mode === "copy" ? "copy_project_entry" : "move_project_entry";
         await invoke(command, {
           sourcePath: entryActionContext.node.path,
           targetDirectoryPath,
@@ -815,9 +884,13 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
           if (entryActionContext.node.type === "file") {
             if (
               activeFilePath &&
-              normalizeForCompare(activeFilePath) === normalizeForCompare(entryActionContext.node.path)
+              normalizeForCompare(activeFilePath) ===
+                normalizeForCompare(entryActionContext.node.path)
             ) {
-              const destinationPath = joinFsPath(targetDirectoryPath, entryActionContext.node.name);
+              const destinationPath = joinFsPath(
+                targetDirectoryPath,
+                entryActionContext.node.name,
+              );
               setActiveFilePath(destinationPath);
             }
           } else if (
@@ -844,7 +917,14 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
         setProcessingEntryAction(false);
       }
     },
-    [activeFilePath, closeEntryActionDialog, columnViews, entryActionContext, projectPath, refreshFileTree],
+    [
+      activeFilePath,
+      closeEntryActionDialog,
+      columnViews,
+      entryActionContext,
+      projectPath,
+      refreshFileTree,
+    ],
   );
 
   const handleSwapColumns = useCallback(() => {
@@ -945,7 +1025,7 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
   };
 
   return (
-    <div className="flex h-full overflow-hidden bg-background">
+    <div className="flex h-screen overflow-hidden bg-background">
       {/* 遮罩层 */}
       {isSidebarOpen && (
         <button
@@ -964,7 +1044,9 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
         )}
       >
         <div className="flex items-center justify-between gap-2 border-b pb-4">
-          <h1 className="truncate text-lg font-semibold text-foreground">{project.name}</h1>
+          <h1 className="truncate text-lg font-semibold text-foreground">
+            {project.name}
+          </h1>
           <Button
             type="button"
             variant="ghost"
@@ -1002,12 +1084,31 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
           >
             <Menu className="h-5 w-5" />
           </Button>
-          <h2 className="truncate text-sm font-semibold text-foreground">{project.name}</h2>
+          <h2 className="truncate text-sm font-semibold text-foreground">
+            {project.name}
+          </h2>
+        </div>
+
+        {/* 桌面顶栏：显示项目标题与当前活动文件路径（作为副标题） */}
+        <div className="hidden lg:flex items-center border-b bg-card/50 px-6 py-3">
+          <div className="flex flex-col">
+            <h1 className="truncate text-lg font-semibold text-foreground">
+              {project.name}
+            </h1>
+            {activeFileDisplayPath ? (
+              <p className="truncate text-sm text-muted-foreground mt-1">
+                {activeFileDisplayPath}
+              </p>
+            ) : (
+              <p className="truncate text-sm text-muted-foreground mt-1">
+                请选择一个文件以开始编辑
+              </p>
+            )}
+          </div>
         </div>
 
         <EditorPane
           activeFilePath={activeFilePath}
-          activeFileDisplayPath={activeFileDisplayPath}
           fileContent={fileContent}
           isLoadingFileContent={isLoadingFileContent}
           fileContentError={fileContentError}

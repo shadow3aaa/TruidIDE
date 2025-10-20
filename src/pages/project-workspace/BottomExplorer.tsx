@@ -1,6 +1,13 @@
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ChevronDown, ChevronUp, ArrowLeft, ArrowLeftRight, ArrowRight, Plus } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  ArrowLeft,
+  ArrowLeftRight,
+  ArrowRight,
+  Plus,
+} from "lucide-react";
 import { ExplorerColumns } from "./ExplorerColumns";
 import type { ColumnId, ColumnState } from "./types";
 
@@ -16,7 +23,10 @@ type Props = {
   previewUrl: string | null;
   previewError: string | null;
   columnOrder: ColumnId[];
-  columnComputed: Record<ColumnId, { view: ColumnState; nodes: any[]; displayPath: string }>;
+  columnComputed: Record<
+    ColumnId,
+    { view: ColumnState; nodes: any[]; displayPath: string }
+  >;
   activeColumn: ColumnId;
   activeFilePath: string | null;
   normalizedProjectPath: string;
@@ -35,7 +45,7 @@ type Props = {
   handleSwapColumns: () => void;
   fileTree: any[];
   fileTreeError: string | null;
-}
+};
 
 export function BottomExplorer(props: Props) {
   const {
@@ -72,9 +82,10 @@ export function BottomExplorer(props: Props) {
   return (
     <section
       className={cn(
-        "fixed inset-x-0 bottom-0 z-40 flex flex-col border-t border-border/60 bg-background/95 shadow-lg transition-[height] duration-300 ease-out supports-[backdrop-filter]:bg-background/70 overflow-hidden",
-        // expanded: full height; collapsed: let content determine height up to responsive max
-        isExplorerOpen ? "h-full" : "max-h-[96px] sm:max-h-[56px]",
+        // When expanded: fixed full-height overlay; when collapsed: participate in layout (not fixed)
+        isExplorerOpen
+          ? "fixed inset-x-0 bottom-0 z-40 flex flex-col border-t border-border/60 bg-background/95 shadow-lg transition-[height] duration-300 ease-out supports-[backdrop-filter]:bg-background/70 overflow-hidden h-full"
+          : "relative z-10 flex flex-col border-t border-border/60 bg-background/95 shadow-none transition-[height] duration-300 ease-out overflow-visible max-h-[96px] sm:max-h-[56px]",
       )}
       aria-expanded={isExplorerOpen}
     >
@@ -112,7 +123,12 @@ export function BottomExplorer(props: Props) {
             </div>
             <div className="flex items-center gap-2">
               {isFilesTab ? (
-                <Button variant="outline" size="sm" onClick={refreshFileTree} disabled={isLoadingFileTree}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={refreshFileTree}
+                  disabled={isLoadingFileTree}
+                >
                   {isLoadingFileTree ? "刷新中…" : "刷新"}
                 </Button>
               ) : (
@@ -125,7 +141,12 @@ export function BottomExplorer(props: Props) {
                   {isLoadingPreview ? "加载中…" : "刷新预览"}
                 </Button>
               )}
-              <Button variant="ghost" size="icon" className="flex-shrink-0" onClick={toggleExplorer}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="flex-shrink-0"
+                onClick={toggleExplorer}
+              >
                 <ChevronDown className="h-5 w-5" />
               </Button>
             </div>
@@ -133,13 +154,32 @@ export function BottomExplorer(props: Props) {
         ) : (
           <div className="flex items-start justify-between gap-4">
             <div className="flex flex-wrap items-center gap-2">
-              {['[', ']', '{', '}', '(', ')', '<', '>', '=', '+', '-', '*', '/'].map((key) => (
+              {[
+                "[",
+                "]",
+                "{",
+                "}",
+                "(",
+                ")",
+                "<",
+                ">",
+                "=",
+                "+",
+                "-",
+                "*",
+                "/",
+              ].map((key) => (
                 <Button key={key} variant="outline" size="sm" className="px-3">
                   {key}
                 </Button>
               ))}
             </div>
-            <Button variant="ghost" size="icon" className="flex-shrink-0" onClick={toggleExplorer}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="flex-shrink-0"
+              onClick={toggleExplorer}
+            >
               <ChevronUp className="h-5 w-5" />
             </Button>
           </div>
@@ -151,7 +191,9 @@ export function BottomExplorer(props: Props) {
             {isFilesTab ? (
               <div className="flex h-full flex-col overflow-hidden">
                 <div className="px-2 pb-2 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">{activeDirectoryDisplayPath}</span>
+                  <span className="font-medium text-foreground">
+                    {activeDirectoryDisplayPath}
+                  </span>
                 </div>
                 <div className="flex-1 overflow-hidden px-2">
                   {isLoadingFileTree ? (
@@ -160,7 +202,9 @@ export function BottomExplorer(props: Props) {
                     </div>
                   ) : fileTreeError ? (
                     <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-                      <p className="text-sm text-destructive">{fileTreeError}</p>
+                      <p className="text-sm text-destructive">
+                        {fileTreeError}
+                      </p>
                     </div>
                   ) : fileTree.length === 0 ? (
                     <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-sm text-muted-foreground">
@@ -235,8 +279,14 @@ export function BottomExplorer(props: Props) {
                   </div>
                 ) : props.previewError ? (
                   <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center">
-                    <p className="text-sm text-destructive">{props.previewError}</p>
-                    <Button size="sm" variant="outline" onClick={requestPreviewReload}>
+                    <p className="text-sm text-destructive">
+                      {props.previewError}
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={requestPreviewReload}
+                    >
                       重试
                     </Button>
                   </div>
@@ -250,7 +300,9 @@ export function BottomExplorer(props: Props) {
                 ) : (
                   <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-sm text-muted-foreground">
                     <p>选择下方的“刷新预览”以加载项目效果。</p>
-                    <p>若项目尚未生成入口文件，请在项目目录中提供 index.html。</p>
+                    <p>
+                      若项目尚未生成入口文件，请在项目目录中提供 index.html。
+                    </p>
                   </div>
                 )}
               </div>

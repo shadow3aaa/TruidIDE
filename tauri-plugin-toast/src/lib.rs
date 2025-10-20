@@ -17,10 +17,13 @@ struct ToastPayload {
 #[tauri::command]
 fn toast<R: Runtime>(app: AppHandle<R>, text: String) -> Result<(), String> {
     let plugin = app.state::<ToastPlugin<R>>().inner();
-    plugin.0.run_mobile_plugin::<()>(
-        "toast",
-        ToastPayload { text },
-    ).map_err(|e| e.to_string())?;
+    #[cfg(mobile)]
+    {
+        plugin
+            .0
+            .run_mobile_plugin::<()>("toast", ToastPayload { text })
+            .map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 

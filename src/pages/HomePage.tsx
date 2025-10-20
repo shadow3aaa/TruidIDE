@@ -16,13 +16,21 @@ function HomePage({ onOpenProjectDialog, onOpenCreateDialog }: HomePageProps) {
       <div className="flex w-full max-w-sm flex-col items-stretch gap-6">
         <header className="text-center">
           <p className="text-sm font-medium text-muted-foreground">欢迎回来</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight">TruidIDE</h1>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight">
+            TruidIDE
+          </h1>
         </header>
         <nav className="flex flex-col gap-3">
-          <Button className="w-full py-6 text-base" onClick={onOpenProjectDialog}>
+          <Button
+            className="w-full py-6 text-base"
+            onClick={onOpenProjectDialog}
+          >
             打开
           </Button>
-          <Button className="w-full py-6 text-base" onClick={onOpenCreateDialog}>
+          <Button
+            className="w-full py-6 text-base"
+            onClick={onOpenCreateDialog}
+          >
             创建
           </Button>
           {secondaryActions.map((action) => (
@@ -37,4 +45,3 @@ function HomePage({ onOpenProjectDialog, onOpenCreateDialog }: HomePageProps) {
 }
 
 export default HomePage;
-

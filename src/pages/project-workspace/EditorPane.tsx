@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 
 type Props = {
   activeFilePath: string | null;
-  activeFileDisplayPath: string | null;
   fileContent: string;
   isLoadingFileContent: boolean;
   fileContentError: string | null;
@@ -14,7 +13,6 @@ type Props = {
 
 export function EditorPane({
   activeFilePath,
-  activeFileDisplayPath,
   fileContent,
   isLoadingFileContent,
   fileContentError,
@@ -23,49 +21,50 @@ export function EditorPane({
   refreshFileContent,
 }: Props) {
   return (
-    <div className="flex h-full overflow-hidden">
-      <main className="flex-1 overflow-y-auto px-4 pt-6 pb-28 sm:px-6 sm:py-8">
-        <div className="mx-auto max-w-4xl">
-          <section className="flex flex-1 flex-col gap-4">
-            <div className="flex flex-col gap-2 border-b border-border/60 pb-4">
-              {activeFilePath ? (
-                <p className="break-all text-xs text-muted-foreground">
-                  {activeFileDisplayPath ?? activeFilePath}
-                </p>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  从下方面板进入“文件管理”选择一个文件开始编辑。
-                </p>
-              )}
+    // 这个外层 div 仍然是一个 flex item，用于在 ProjectWorkspace 中占据空间。
+    <div className="flex flex-1 flex-col min-h-0">
+      {/*
+        [策略变更]: 使用 CSS Grid 替代 Flexbox 进行内部布局。
+        - `grid`: 启用网格布局。
+        - `grid-rows-[auto_1fr]`: 定义两行。
+            - `auto`: 第一行（头部）的高度由其内容决定。
+            - `1fr`: 第二行（编辑器容器）将占据所有剩余的垂直空间。
+        这种方式对于此类布局通常比嵌套 flexbox 更可靠。
+      */}
+      <main className="flex-1 min-h-0 px-0 py-0 sm:px-0 sm:py-0">
+        {/* 编辑器容器：直接位于顶栏下方，占据所有剩余空间 */}
+        <div className="w-full relative min-h-0 h-full">
+          {isLoadingFileContent ? (
+            <div className="absolute inset-0 flex items-center justify-center px-6 text-sm text-muted-foreground">
+              正在加载文件内容…
             </div>
-            <div className="relative flex-1 overflow-hidden">
-              {isLoadingFileContent ? (
-                <div className="flex h-full items-center justify-center px-6 text-sm text-muted-foreground">
-                  正在加载文件内容…
-                </div>
-              ) : fileContentError ? (
-                <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-                  <p className="text-sm text-destructive">{fileContentError}</p>
-                  <Button size="sm" variant="outline" onClick={refreshFileContent}>
-                    重试
-                  </Button>
-                </div>
-              ) : activeFilePath ? (
-                <CodeMirror
-                  value={fileContent}
-                  height="100%"
-                  extensions={editorExtensions}
-                  onChange={(value) => onEditorChange(value)}
-                  basicSetup={{ highlightActiveLine: true, bracketMatching: true }}
-                  minHeight="100%"
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center px-6 text-sm text-muted-foreground">
-                  选择一个文件以在此处查看或编辑内容。
-                </div>
-              )}
+          ) : fileContentError ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
+              <p className="text-sm text-destructive">{fileContentError}</p>
+              <Button size="sm" variant="outline" onClick={refreshFileContent}>
+                重试
+              </Button>
             </div>
-          </section>
+          ) : activeFilePath ? (
+            <div className="absolute inset-0 no-scrollbar">
+              <CodeMirror
+                value={fileContent}
+                extensions={editorExtensions}
+                onChange={onEditorChange}
+                height="100%"
+                // 增加一个行内 style，确保 CodeMirror 内部的容器也能正确应用高度。
+                style={{ height: "100%" }}
+                basicSetup={{
+                  highlightActiveLine: true,
+                  bracketMatching: true,
+                }}
+              />
+            </div>
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center px-6 text-sm text-muted-foreground">
+              选择一个文件以在此处查看或编辑内容。
+            </div>
+          )}
         </div>
       </main>
     </div>
