@@ -1,11 +1,22 @@
+mod fs_utils;
+
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{self, File},
-    io::{self, Write},
-    path::{Path, PathBuf},
+    io::Write,
+    path::PathBuf,
     time::UNIX_EPOCH,
 };
-use tauri::{path::BaseDirectory, Manager};
+// refer to tauri items with fully-qualified paths to avoid shadowing `Result`.
+
+use crate::fs_utils::{
+    FileTreeEntry,
+    copy_entry_recursive,
+    ensure_projects_dir,
+    is_cross_device_error,
+    normalize_entry_name,
+    read_directory_entries,
+};
 
 #[derive(Serialize)]
 pub struct ProjectEntry {
@@ -58,22 +69,79 @@ fn list_projects(app: tauri::AppHandle) -> Result<Vec<ProjectEntry>, String> {
     Ok(projects)
 }
 
-#[derive(Serialize, Clone, Copy, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-enum FileEntryKind {
-    File,
-    Folder,
+
+#[derive(Deserialize)]
+pub struct CreateProjectRequest {
+    template_id: String,
+    name: String,
 }
 
 #[derive(Serialize)]
-struct FileTreeEntry {
-    name: String,
-    path: String,
-    #[serde(rename = "type")]
-    kind: FileEntryKind,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    children: Option<Vec<FileTreeEntry>>,
+pub struct CreateProjectResponse {
+    project: ProjectEntry,
 }
+
+#[tauri::command]
+fn create_project(
+    app: tauri::AppHandle,
+    request: CreateProjectRequest,
+) -> Result<CreateProjectResponse, String> {
+    if request.template_id != "basic-web" {
+        return Err("暂不支持该模板".into());
+    }
+
+    let trimmed = request.name.trim();
+    if trimmed.is_empty() {
+        return Err("项目名称不能为空".into());
+    }
+
+    let invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
+    if trimmed.chars().any(|ch| invalid_chars.contains(&ch)) {
+        return Err("项目名称包含不允许的字符".into());
+    }
+
+    let root = ensure_projects_dir(&app)?;
+
+    let mut folder_name = trimmed.to_string();
+    let mut candidate = root.join(&folder_name);
+    let mut counter = 1;
+    while candidate.exists() {
+        folder_name = format!("{}-{counter}", trimmed);
+        candidate = root.join(&folder_name);
+        counter += 1;
+    }
+
+    fs::create_dir_all(&candidate).map_err(|e| e.to_string())?;
+
+    let index_path = candidate.join("index.html");
+    let mut file = File::create(&index_path).map_err(|e| e.to_string())?;
+    // Use external template files to keep this source small. Paths are relative to this file's directory at compile time.
+    const TEMPLATE: &str = include_str!("templates/basic_web_index.html");
+    file.write_all(TEMPLATE.as_bytes()).map_err(|e| e.to_string())?;
+
+    // Also write the helper JS file into the project so the template can import it.
+    let js_path = candidate.join("truid_api.js");
+    let mut js_file = File::create(&js_path).map_err(|e| e.to_string())?;
+    const TRUID_API_JS: &str = include_str!("templates/truid_api.js");
+    js_file
+        .write_all(TRUID_API_JS.as_bytes())
+        .map_err(|e| e.to_string())?;
+
+    let now = std::time::SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_secs();
+
+    let project = ProjectEntry {
+        name: folder_name,
+        path: candidate.to_string_lossy().into_owned(),
+        last_modified_secs: Some(now),
+    };
+
+    Ok(CreateProjectResponse { project })
+}
+
+
 
 #[tauri::command]
 fn list_project_tree(
@@ -157,64 +225,6 @@ fn save_project_file(
 enum NewEntryKind {
     File,
     Folder,
-}
-
-fn normalize_entry_name(raw: &str) -> Result<String, String> {
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return Err("名称不能为空".into());
-    }
-
-    if trimmed == "." || trimmed == ".." {
-        return Err("名称不可为 . 或 ..".into());
-    }
-
-    let invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
-    if trimmed.chars().any(|ch| invalid_chars.contains(&ch)) {
-        return Err("名称包含不允许的字符".into());
-    }
-
-    Ok(trimmed.to_string())
-}
-
-fn is_cross_device_error(err: &io::Error) -> bool {
-    match err.raw_os_error() {
-        Some(code) if code == 17 || code == 18 => true,
-        _ => false,
-    }
-}
-
-fn copy_entry_recursive(source: &Path, destination: &Path) -> Result<(), String> {
-    if source.is_dir() {
-        fs::create_dir(destination).map_err(|e| format!("复制目录失败: {e}"))?;
-
-        let entries = fs::read_dir(source).map_err(|e| format!("复制目录失败: {e}"))?;
-        for entry in entries {
-            let entry = entry.map_err(|e| format!("复制目录失败: {e}"))?;
-            let file_type = entry
-                .file_type()
-                .map_err(|e| format!("复制目录失败: {e}"))?;
-
-            if file_type.is_symlink() {
-                continue;
-            }
-
-            let path = entry.path();
-            let dest_path = destination.join(entry.file_name());
-
-            if file_type.is_dir() {
-                copy_entry_recursive(&path, &dest_path)?;
-            } else if file_type.is_file() {
-                fs::copy(&path, &dest_path).map_err(|e| format!("复制文件失败: {e}"))?;
-            }
-        }
-    } else if source.is_file() {
-        fs::copy(source, destination).map_err(|e| format!("复制文件失败: {e}"))?;
-    } else {
-        return Err("仅支持复制文件或文件夹".into());
-    }
-
-    Ok(())
 }
 
 #[tauri::command]
@@ -541,205 +551,6 @@ fn resolve_preview_entry(app: tauri::AppHandle, project_path: String) -> Result<
     Err("未找到可用的预览入口文件，请在项目目录中提供 index.html".into())
 }
 
-fn read_directory_entries(dir: &Path) -> Result<Vec<FileTreeEntry>, String> {
-    let mut entries = Vec::new();
-
-    let read_dir = match fs::read_dir(dir) {
-        Ok(read_dir) => read_dir,
-        Err(err) => return Err(err.to_string()),
-    };
-
-    for entry in read_dir {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(_) => continue,
-        };
-
-        let path = entry.path();
-        let file_type = match entry.file_type() {
-            Ok(file_type) => file_type,
-            Err(_) => continue,
-        };
-
-        if file_type.is_symlink() {
-            continue;
-        }
-
-        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
-            continue;
-        };
-
-        if file_type.is_dir() {
-            let children = read_directory_entries(&path).unwrap_or_default();
-            entries.push(FileTreeEntry {
-                name: name.to_string(),
-                path: path.to_string_lossy().into_owned(),
-                kind: FileEntryKind::Folder,
-                children: Some(children),
-            });
-        } else {
-            entries.push(FileTreeEntry {
-                name: name.to_string(),
-                path: path.to_string_lossy().into_owned(),
-                kind: FileEntryKind::File,
-                children: None,
-            });
-        }
-    }
-
-    entries.sort_by(|a, b| {
-        let a_is_dir = matches!(a.kind, FileEntryKind::Folder);
-        let b_is_dir = matches!(b.kind, FileEntryKind::Folder);
-        match b_is_dir.cmp(&a_is_dir) {
-            std::cmp::Ordering::Equal => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-            other => other,
-        }
-    });
-
-    Ok(entries)
-}
-
-#[derive(Deserialize)]
-pub struct CreateProjectRequest {
-    template_id: String,
-    name: String,
-}
-
-#[derive(Serialize)]
-pub struct CreateProjectResponse {
-    project: ProjectEntry,
-}
-
-#[tauri::command]
-fn create_project(
-    app: tauri::AppHandle,
-    request: CreateProjectRequest,
-) -> Result<CreateProjectResponse, String> {
-    if request.template_id != "basic-web" {
-        return Err("暂不支持该模板".into());
-    }
-
-    let trimmed = request.name.trim();
-    if trimmed.is_empty() {
-        return Err("项目名称不能为空".into());
-    }
-
-    let invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
-    if trimmed.chars().any(|ch| invalid_chars.contains(&ch)) {
-        return Err("项目名称包含不允许的字符".into());
-    }
-
-    let root = ensure_projects_dir(&app)?;
-
-    let mut folder_name = trimmed.to_string();
-    let mut candidate = root.join(&folder_name);
-    let mut counter = 1;
-    while candidate.exists() {
-        folder_name = format!("{}-{counter}", trimmed);
-        candidate = root.join(&folder_name);
-        counter += 1;
-    }
-
-    fs::create_dir_all(&candidate).map_err(|e| e.to_string())?;
-
-    let index_path = candidate.join("index.html");
-    let mut file = File::create(&index_path).map_err(|e| e.to_string())?;
-    let html = r#"<!DOCTYPE html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="utf-8" />
-    <title>TruidIDE Project</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <style>
-      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.5; margin: 0; padding: 3rem; background: #f5f5f5; }
-      main { max-width: 720px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 2rem; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.1); }
-      h1 { margin-top: 0; font-size: 2rem; }
-      p { color: #475569; }
-      code { background: #e2e8f0; padding: 0.25rem 0.5rem; border-radius: 6px; }
-      button { margin-top: 1.5rem; padding: 0.75rem 1.5rem; font-size: 1rem; color: #fff; background-color: #007bff; border: none; border-radius: 6px; cursor: pointer; }
-      button:hover { background-color: #0056b3; }
-    </style>
-  </head>
-  <body>
-    <main>
-      <h1>TruidIDE 基础 Web 模板</h1>
-      <p>这是通过 TruidIDE 创建的示例项目。您可以在此目录中添加静态资源或接入框架构建流程。</p>
-      <p><strong>预览提示：</strong> 将您的 web 构建产物放在该目录下，TruidIDE 将在安卓设备上提供预览和打包能力。</p>
-      <p><strong>入口文件：</strong> <code>index.html</code></p>
-      <button onclick="showToast()">显示 Toast</button>
-    </main>
-
-    <script>
-      (() => {
-        const promises = new Map();
-        let seq = 0;
-
-        window.addEventListener('message', (event) => {
-          if (event.source !== window.parent) return;
-          const { id, ...data } = event.data;
-          if (promises.has(id)) {
-            const [resolve, reject] = promises.get(id);
-            if (data.error) {
-              reject(data.error);
-            } else {
-              resolve(data.payload);
-            }
-            promises.delete(id);
-          }
-        });
-
-        function invoke(cmd, args) {
-          return new Promise((resolve, reject) => {
-            const id = seq++;
-            promises.set(id, [resolve, reject]);
-            window.parent.postMessage({ id, cmd, args }, '*');
-          });
-        }
-
-        const truidApi = {
-          toast: (text) => invoke('plugin:toast|toast', { text }),
-        };
-
-        async function showToast() {
-          try {
-            await truidApi.toast('来自预览项目的问候！');
-          } catch (e) {
-            console.error(e);
-          }
-        }
-
-        window.showToast = showToast;
-      })();
-    </script>
-  </body>
-</html>
-"#;
-    file.write_all(html.as_bytes()).map_err(|e| e.to_string())?;
-
-    let now = std::time::SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|e| e.to_string())?
-        .as_secs();
-
-    let project = ProjectEntry {
-        name: folder_name,
-        path: candidate.to_string_lossy().into_owned(),
-        last_modified_secs: Some(now),
-    };
-
-    Ok(CreateProjectResponse { project })
-}
-
-fn ensure_projects_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let dir = app
-        .path()
-        .resolve("projects", BaseDirectory::AppData)
-        .map_err(|e| e.to_string())?;
-
-    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-
-    Ok(dir)
-}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
