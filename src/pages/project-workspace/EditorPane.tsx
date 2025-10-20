@@ -1,4 +1,5 @@
 import CodeMirror from "@uiw/react-codemirror";
+import mapleFontTheme from "@/lib/codemirror-font";
 import { Button } from "@/components/ui/button";
 
 type Props = {
@@ -51,7 +52,7 @@ export function EditorPane({
             <div className="absolute inset-0 no-scrollbar">
               <CodeMirror
                 value={fileContent}
-                extensions={editorExtensions}
+                extensions={[mapleFontTheme, ...editorExtensions]}
                 onChange={onEditorChange}
                 onCreateEditor={(editor) => {
                   try {
