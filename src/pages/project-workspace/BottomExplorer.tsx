@@ -72,8 +72,9 @@ export function BottomExplorer(props: Props) {
   return (
     <section
       className={cn(
-        "fixed inset-x-0 bottom-0 z-40 flex flex-col border-t border-border/60 bg-background/95 shadow-lg transition-[height] duration-300 ease-out supports-[backdrop-filter]:bg-background/70",
-  isExplorerOpen ? "h-full" : "h-[96px]",
+        "fixed inset-x-0 bottom-0 z-40 flex flex-col border-t border-border/60 bg-background/95 shadow-lg transition-[height] duration-300 ease-out supports-[backdrop-filter]:bg-background/70 overflow-hidden",
+        // expanded: full height; collapsed: let content determine height up to responsive max
+        isExplorerOpen ? "h-full" : "max-h-[96px] sm:max-h-[56px]",
       )}
       aria-expanded={isExplorerOpen}
     >
