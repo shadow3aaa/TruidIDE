@@ -21,10 +21,18 @@ class MainActivity : TauriActivity() {
     val content: View? = findViewById(android.R.id.content)
     content?.let { root ->
       ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
-        // Get IME insets (keyboard) and system bars to ensure correct bottom offset
-        val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime() or WindowInsetsCompat.Type.systemBars())
-        // updatePadding is an extension from androidx.core.view
-        v.updatePadding(bottom = imeInsets.bottom)
+        // Get system bars (status/nav) and IME insets
+        val systemInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+        val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime())
+
+        // Apply top padding for status bar, left/right for any system inset, and bottom from IME
+        v.updatePadding(
+          top = systemInsets.top,
+          left = systemInsets.left,
+          right = systemInsets.right,
+          bottom = imeInsets.bottom,
+        )
+
         // Return the insets unchanged
         insets
       }
