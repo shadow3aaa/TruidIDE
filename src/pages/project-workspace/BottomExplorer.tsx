@@ -45,6 +45,7 @@ type Props = {
   handleSwapColumns: () => void;
   fileTree: any[];
   fileTreeError: string | null;
+  insertTextAtCursor?: (text: string) => void;
 };
 
 export function BottomExplorer(props: Props) {
@@ -96,6 +97,8 @@ export function BottomExplorer(props: Props) {
               {/* tabs are controlled from parent; render placeholder buttons via setActiveBottomTab */}
               <button
                 type="button"
+                onPointerDown={(e) => e.preventDefault()}
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => setActiveBottomTab("files")}
                 className={cn(
                   "rounded-full px-3 py-1 text-sm font-medium transition",
@@ -109,6 +112,8 @@ export function BottomExplorer(props: Props) {
               </button>
               <button
                 type="button"
+                onPointerDown={(e) => e.preventDefault()}
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => setActiveBottomTab("preview")}
                 className={cn(
                   "rounded-full px-3 py-1 text-sm font-medium transition",
@@ -126,6 +131,8 @@ export function BottomExplorer(props: Props) {
                 <Button
                   variant="outline"
                   size="sm"
+                  onPointerDown={(e) => e.preventDefault()}
+                  onMouseDown={(e) => e.preventDefault()}
                   onClick={refreshFileTree}
                   disabled={isLoadingFileTree}
                 >
@@ -135,6 +142,8 @@ export function BottomExplorer(props: Props) {
                 <Button
                   variant="outline"
                   size="sm"
+                  onPointerDown={(e) => e.preventDefault()}
+                  onMouseDown={(e) => e.preventDefault()}
                   onClick={requestPreviewReload}
                   disabled={isLoadingPreview}
                 >
@@ -169,7 +178,15 @@ export function BottomExplorer(props: Props) {
                 "*",
                 "/",
               ].map((key) => (
-                <Button key={key} variant="outline" size="sm" className="px-3">
+                <Button
+                  key={key}
+                  variant="outline"
+                  size="sm"
+                  className="px-3"
+                  onPointerDown={(e) => e.preventDefault()}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => props.insertTextAtCursor?.(key)}
+                >
                   {key}
                 </Button>
               ))}
@@ -178,6 +195,8 @@ export function BottomExplorer(props: Props) {
               variant="ghost"
               size="icon"
               className="flex-shrink-0"
+              onPointerDown={(e) => e.preventDefault()}
+              onMouseDown={(e) => e.preventDefault()}
               onClick={toggleExplorer}
             >
               <ChevronUp className="h-5 w-5" />
@@ -233,6 +252,8 @@ export function BottomExplorer(props: Props) {
                       type="button"
                       variant="ghost"
                       size="icon"
+                      onPointerDown={(e) => e.preventDefault()}
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={goToParentDirectory}
                       disabled={!canGoToParent}
                       aria-label="返回父目录"
@@ -243,6 +264,8 @@ export function BottomExplorer(props: Props) {
                       type="button"
                       variant="ghost"
                       size="icon"
+                      onPointerDown={(e) => e.preventDefault()}
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={goToLastVisitedChildDirectory}
                       disabled={!canGoToLastVisitedChild}
                       aria-label="前往上次访问的子目录"
@@ -253,6 +276,8 @@ export function BottomExplorer(props: Props) {
                       type="button"
                       variant="ghost"
                       size="icon"
+                      onPointerDown={(e) => e.preventDefault()}
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={openCreateEntryDialog}
                       aria-label="新建文件或文件夹"
                     >
@@ -262,6 +287,8 @@ export function BottomExplorer(props: Props) {
                       type="button"
                       variant="ghost"
                       size="icon"
+                      onPointerDown={(e) => e.preventDefault()}
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={handleSwapColumns}
                       aria-label="交换左右文件栏"
                     >

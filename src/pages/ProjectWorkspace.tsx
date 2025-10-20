@@ -105,6 +105,77 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
 
   const longPressTimerRef = useRef<number | null>(null);
   const longPressTriggeredRef = useRef(false);
+  // ref to access CodeMirror editor instance
+  const editorRef = useRef<any | null>(null);
+
+  // insert text into editor at current selection, handling pair insertion
+  const insertTextAtCursor = useCallback((text: string) => {
+    const view = editorRef.current?.view ?? editorRef.current;
+    if (!view) return;
+
+    try {
+      // For CodeMirror 6, view has state and dispatch
+      const state = view.state;
+      const sel = state.selection.main;
+
+      // If text is a pair like () {} [] <> "" '', insert both and place cursor between
+      const pairs: Record<string, string> = {
+        '(': ')',
+        '[': ']',
+        '{': '}',
+        '<': '>',
+        '"': '"',
+        "'": "'",
+      };
+
+      const openChar = text;
+      const closeChar = pairs[openChar];
+
+      if (closeChar) {
+        const changes = {
+          from: sel.from,
+          to: sel.to,
+          insert: openChar + closeChar,
+        };
+        view.dispatch({
+          changes,
+          selection: { anchor: sel.from + 1 },
+          scrollIntoView: true,
+        });
+      } else {
+        // default: insert text at selection
+        view.dispatch({
+          changes: { from: sel.from, to: sel.to, insert: text },
+          selection: { anchor: sel.from + text.length },
+          scrollIntoView: true,
+        });
+      }
+      // focus editor DOM
+      const dom = view.dom || view.contentDOM || view.scrollDOM;
+      if (dom && typeof dom.focus === 'function') dom.focus();
+    } catch (e) {
+      // best-effort: fall back to inserting into textarea if available
+      const cm = editorRef.current;
+      if (cm && cm.editor) {
+        try {
+          const textarea = cm.editor.textarea as HTMLTextAreaElement | undefined;
+          if (textarea) {
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const value = textarea.value;
+            const before = value.slice(0, start);
+            const after = value.slice(end);
+            textarea.value = before + text + after;
+            const pos = start + text.length;
+            textarea.setSelectionRange(pos, pos);
+            textarea.focus();
+          }
+        } catch (err) {
+          // ignore
+        }
+      }
+    }
+  }, []);
 
   const cancelLongPress = useCallback(() => {
     if (longPressTimerRef.current !== null) {
@@ -1115,6 +1186,7 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
           editorExtensions={editorExtensions}
           onEditorChange={handleEditorChange}
           refreshFileContent={refreshFileContent}
+          editorRef={editorRef}
         />
 
         {isExplorerOpen && (
@@ -1157,6 +1229,7 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
           handleSwapColumns={handleSwapColumns}
           fileTree={fileTree}
           fileTreeError={fileTreeError}
+          insertTextAtCursor={insertTextAtCursor}
         />
 
         <EntryActionDialog

@@ -9,6 +9,7 @@ type Props = {
   editorExtensions: any[];
   onEditorChange: (value: string) => void;
   refreshFileContent: () => void;
+  editorRef?: React.MutableRefObject<any | null>;
 };
 
 export function EditorPane({
@@ -19,6 +20,7 @@ export function EditorPane({
   editorExtensions,
   onEditorChange,
   refreshFileContent,
+  editorRef,
 }: Props) {
   return (
     // 这个外层 div 仍然是一个 flex item，用于在 ProjectWorkspace 中占据空间。
@@ -51,6 +53,16 @@ export function EditorPane({
                 value={fileContent}
                 extensions={editorExtensions}
                 onChange={onEditorChange}
+                onCreateEditor={(editor) => {
+                  try {
+                    if (editorRef) {
+                      // @uiw/react-codemirror 的 onCreateEditor 通常会传入 EditorView
+                      editorRef.current = editor as any;
+                    }
+                  } catch (e) {
+                    // ignore
+                  }
+                }}
                 height="100%"
                 // 增加一个行内 style，确保 CodeMirror 内部的容器也能正确应用高度。
                 style={{ height: "100%" }}
