@@ -9,12 +9,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import HomePage from "@/pages/HomePage";
 import ProjectWorkspace from "@/pages/ProjectWorkspace";
 import type { ProjectEntry } from "@/types/project";
 import { invoke } from "@tauri-apps/api/core";
-import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 
 type CreateProjectRequest = {
@@ -186,6 +187,192 @@ function App() {
     }
   };
 
+  // Project action dialog (long-press / context menu) state
+  const [projectActionContext, setProjectActionContext] = useState<
+    ProjectEntry | null
+  >(null);
+  const [isProjectActionDialogOpen, setProjectActionDialogOpen] = useState(false);
+  const [projectActionError, setProjectActionError] = useState<string | null>(
+    null,
+  );
+  const [pendingProjectAction, setPendingProjectAction] = useState<
+    "rename" | null
+  >(null);
+  const [renameProjectName, setRenameProjectName] = useState("");
+  const [isProcessingProjectAction, setProcessingProjectAction] = useState(false);
+
+  const projectLongPressTimerRef = useRef<number | null>(null);
+  const projectLongPressTriggeredRef = useRef(false);
+
+  const cancelProjectLongPress = useCallback(() => {
+    if (projectLongPressTimerRef.current !== null) {
+      window.clearTimeout(projectLongPressTimerRef.current);
+      projectLongPressTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => cancelProjectLongPress();
+  }, [cancelProjectLongPress]);
+
+  const openProjectActionDialog = useCallback((project: ProjectEntry) => {
+    setProjectActionContext(project);
+    setRenameProjectName(project.name);
+    setProjectActionDialogOpen(true);
+    setPendingProjectAction(null);
+    setProjectActionError(null);
+  }, []);
+
+  const closeProjectActionDialog = useCallback(() => {
+    if (isProcessingProjectAction) return;
+    setProjectActionDialogOpen(false);
+    setProjectActionContext(null);
+    setPendingProjectAction(null);
+    setProjectActionError(null);
+    setRenameProjectName("");
+  }, [isProcessingProjectAction]);
+
+  const handleProjectPointerDown = useCallback(
+    (event: React.PointerEvent<HTMLButtonElement>, project: ProjectEntry) => {
+      if (event.pointerType === "mouse" && event.button !== 0) {
+        return;
+      }
+      cancelProjectLongPress();
+      projectLongPressTriggeredRef.current = false;
+      projectLongPressTimerRef.current = window.setTimeout(() => {
+        projectLongPressTriggeredRef.current = true;
+        openProjectActionDialog(project);
+      }, 450);
+    },
+    [cancelProjectLongPress, openProjectActionDialog],
+  );
+
+  const handleProjectPointerUp = useCallback(
+    (_event: React.PointerEvent<HTMLButtonElement>) => {
+      cancelProjectLongPress();
+    },
+    [cancelProjectLongPress],
+  );
+
+  const handleProjectContextMenu = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>, project: ProjectEntry) => {
+      event.preventDefault();
+      cancelProjectLongPress();
+      projectLongPressTriggeredRef.current = false;
+      openProjectActionDialog(project);
+    },
+    [cancelProjectLongPress, openProjectActionDialog],
+  );
+
+  const refreshProjects = useCallback(() => {
+    setIsLoadingProjects(true);
+    setProjectsError(null);
+    invoke<ProjectEntry[]>("list_projects")
+      .then((result) => {
+        setProjects(result);
+      })
+      .catch((error: unknown) => {
+        const message =
+          typeof error === "string"
+            ? error
+            : error instanceof Error
+            ? error.message
+            : "获取项目列表失败";
+        setProjectsError(message);
+      })
+      .finally(() => setIsLoadingProjects(false));
+  }, []);
+
+  const handleDeleteProject = useCallback(async () => {
+    if (!projectActionContext) return;
+
+    setProcessingProjectAction(true);
+    setProjectActionError(null);
+
+    try {
+      await invoke("delete_project_entry", { path: projectActionContext.path });
+
+      // If the deleted project was selected to open, clear the selection
+      setProjectToOpen((prev) => (prev?.path === projectActionContext.path ? null : prev));
+
+      // If active project is the same, unset and navigate home
+      if (activeProject?.path === projectActionContext.path) {
+        setActiveProject(null);
+        navigate("/");
+      }
+
+      refreshProjects();
+      closeProjectActionDialog();
+    } catch (error) {
+      const message =
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+          ? error.message
+          : "删除失败";
+      setProjectActionError(message);
+    } finally {
+      setProcessingProjectAction(false);
+    }
+  }, [projectActionContext, activeProject, closeProjectActionDialog, refreshProjects, navigate]);
+
+  const handleStartRenameProject = useCallback(() => {
+    if (!projectActionContext || isProcessingProjectAction) return;
+    setPendingProjectAction("rename");
+    setRenameProjectName(projectActionContext.name);
+    setProjectActionError(null);
+  }, [projectActionContext, isProcessingProjectAction]);
+
+  const handleCancelRenameProject = useCallback(() => {
+    if (!projectActionContext || isProcessingProjectAction) return;
+    setPendingProjectAction(null);
+    setProjectActionError(null);
+    setRenameProjectName(projectActionContext.name);
+  }, [projectActionContext, isProcessingProjectAction]);
+
+  const handleSubmitRenameProject = useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (!projectActionContext) return;
+
+      const trimmed = renameProjectName.trim();
+      if (!trimmed) {
+        setProjectActionError("名称不能为空");
+        return;
+      }
+
+      if (trimmed === projectActionContext.name) {
+        closeProjectActionDialog();
+        return;
+      }
+
+      setProcessingProjectAction(true);
+      setProjectActionError(null);
+
+      try {
+        await invoke("rename_project_entry", {
+          path: projectActionContext.path,
+          newName: trimmed,
+        });
+
+        // Refresh whole project list to pick up new names/paths
+        refreshProjects();
+        closeProjectActionDialog();
+      } catch (error) {
+        const message =
+          typeof error === "string"
+            ? error
+            : error instanceof Error
+            ? error.message
+            : "重命名失败";
+        setProjectActionError(message);
+      } finally {
+        setProcessingProjectAction(false);
+      }
+    },
+    [projectActionContext, renameProjectName, closeProjectActionDialog, refreshProjects],
+  );
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Routes>
@@ -239,7 +426,19 @@ function App() {
                     <li key={project.path}>
                       <button
                         type="button"
-                        onClick={() => setProjectToOpen(project)}
+                        onClick={(e) => {
+                          // prevent click immediately after long-press
+                          if (projectLongPressTriggeredRef.current) {
+                            projectLongPressTriggeredRef.current = false;
+                            e.preventDefault();
+                            e.stopPropagation();
+                            return;
+                          }
+                          setProjectToOpen(project);
+                        }}
+                        onPointerDown={(e) => handleProjectPointerDown(e as any, project)}
+                        onPointerUp={(e) => handleProjectPointerUp(e as any)}
+                        onContextMenu={(e) => handleProjectContextMenu(e as any, project)}
                         className={cn(
                           "w-full rounded-lg border bg-card p-4 text-left text-card-foreground transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                           isSelected
@@ -281,6 +480,60 @@ function App() {
               打开项目
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Project action dialog for long-press / context menu */}
+      <Dialog
+        open={isProjectActionDialogOpen}
+        onOpenChange={(open) => {
+          if (!open && isProcessingProjectAction) return;
+          setProjectActionDialogOpen(open);
+          if (!open) {
+            setProjectActionContext(null);
+            setPendingProjectAction(null);
+            setProjectActionError(null);
+            setRenameProjectName("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-sm" showCloseButton={!isProcessingProjectAction}>
+          {projectActionContext ? (
+            pendingProjectAction === "rename" ? (
+              <div className="space-y-5">
+                <div className="items-center text-center">
+                  <h3 className="text-lg font-semibold">重命名</h3>
+                  <p className="text-sm">当前项目：<span className="ml-1 font-medium text-foreground">{projectActionContext.name}</span></p>
+                </div>
+                <form className="space-y-5" onSubmit={handleSubmitRenameProject}>
+                  <Input value={renameProjectName} onChange={(e) => setRenameProjectName(e.target.value)} autoFocus disabled={isProcessingProjectAction} />
+                  {projectActionError ? <p className="text-sm text-destructive">{projectActionError}</p> : null}
+                  <DialogFooter>
+                    <Button type="button" variant="ghost" onClick={handleCancelRenameProject} disabled={isProcessingProjectAction}>返回</Button>
+                    <Button type="submit" disabled={isProcessingProjectAction}>{isProcessingProjectAction ? "提交中…" : "确认重命名"}</Button>
+                  </DialogFooter>
+                </form>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                <div className="items-center text-center">
+                  <h3 className="text-lg font-semibold">选择操作</h3>
+                  <p className="text-sm">项目：<span className="ml-1 font-medium text-foreground">{projectActionContext.name}</span></p>
+                </div>
+                {projectActionError ? <p className="text-sm text-destructive">{projectActionError}</p> : null}
+                <div className="grid grid-cols-2 gap-3">
+                  <Button type="button" variant="ghost" onClick={handleStartRenameProject} disabled={isProcessingProjectAction} className="h-20 flex-col items-start justify-center gap-1 rounded-xl border bg-accent/40 px-4 text-left text-sm font-semibold shadow-sm transition hover:bg-accent">
+                    <Pencil className="h-5 w-5 text-muted-foreground" />
+                    <span>重命名</span>
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={handleDeleteProject} disabled={isProcessingProjectAction} className="h-20 flex-col items-start justify-center gap-1 rounded-xl border border-destructive/50 bg-destructive/5 px-4 text-left text-sm font-semibold text-destructive shadow-sm transition hover:bg-destructive/10">
+                    <Trash2 className="h-5 w-5" />
+                    <span>删除</span>
+                  </Button>
+                </div>
+              </div>
+            )
+          ) : null}
         </DialogContent>
       </Dialog>
 
