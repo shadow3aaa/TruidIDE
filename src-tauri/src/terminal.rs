@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::prelude::*;
 #[cfg(target_os = "android")]
+use std::io::{self, BufReader};
+#[cfg(target_os = "android")]
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
