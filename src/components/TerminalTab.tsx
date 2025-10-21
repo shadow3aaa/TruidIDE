@@ -292,20 +292,47 @@ export default function TerminalTab({ projectPath }: Props) {
     if (!term) return;
 
   let unlisten: UnlistenFn | null = null;
+  let mountedSid: string | null = null;
+  const lastSeqRef = { current: 0 } as { current: number };
 
     const start = async () => {
       try {
         const sid: string = await invoke("start_terminal_session", { cwd: projectPath });
-        setSessionId(sid);
+  setSessionId(sid);
+  mountedSid = sid;
         setRunning(true);
+
+        // register a listener first so we won't miss events emitted after
+        // we attach; payloads are expected to be objects { seq, data }.
         unlisten = await listen(`terminal-output-${sid}`, (event) => {
           try {
-            const payload = (event as any).payload ?? "";
-            term.write(String(payload));
+            const payload = (event as any).payload ?? null;
+            if (!payload) return;
+            const seq = typeof payload.seq === "number" ? payload.seq : NaN;
+            const data = typeof payload.data === "string" ? payload.data : String(payload);
+            if (!Number.isNaN(seq) && seq > lastSeqRef.current) {
+              term.write(data);
+              lastSeqRef.current = seq;
+            }
           } catch (e) {
             // ignore
           }
         });
+
+        // register subscription and replay buffered output
+        try {
+          const snapshot: Array<{ seq: number; data: string }> = await invoke("attach_terminal_session", { sessionId: sid });
+          
+          for (const item of snapshot) {
+            if (typeof item.seq === "number" && item.seq > lastSeqRef.current) {
+              try { term.write(item.data); } catch (e) { /* ignore */ }
+              lastSeqRef.current = item.seq;
+            }
+          }
+        } catch (e) {
+          // attach failed — surface a small message but keep connection
+          try { term.writeln("无法附加到终端会话：" + String(e)); } catch (e) {}
+        }
 
         term.onData((data) => {
           if (!sid) return;
@@ -313,16 +340,16 @@ export default function TerminalTab({ projectPath }: Props) {
         });
 
         // initial resize
-          try {
-            const fit = fitRef.current;
-            fit?.fit();
-            try { term.focus(); } catch (e) { /* ignore */ }
-            const cols = term.cols;
-            const rows = term.rows;
+        try {
+          const fit = fitRef.current;
+          fit?.fit();
+          try { term.focus(); } catch (e) { /* ignore */ }
+          const cols = term.cols;
+          const rows = term.rows;
             await invoke("resize_terminal", { sessionId: sid, cols, rows });
-          } catch (_) {
-            // ignore
-          }
+        } catch (_) {
+          // ignore
+        }
       } catch (e) {
         term.writeln("无法启动终端会话：" + String(e));
       }
@@ -338,8 +365,9 @@ export default function TerminalTab({ projectPath }: Props) {
           // ignore
         }
       }
-      if (sessionId) {
-        invoke("stop_terminal_session", { sessionId: sessionId }).catch(() => {});
+      // detach rather than stop so the backend session can persist
+      if (mountedSid) {
+        invoke("detach_terminal_session", { sessionId: mountedSid }).catch(() => {});
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

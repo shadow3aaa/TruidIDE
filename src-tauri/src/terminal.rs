@@ -1,6 +1,7 @@
 use once_cell::sync::OnceCell;
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque, HashSet};
+use serde::Serialize;
 #[cfg(target_os = "android")]
 use std::fs::{self, File};
 use std::io::prelude::*;
@@ -51,6 +52,32 @@ fn sessions_map() -> &'static Mutex<
 fn generate_session_id() -> String {
     let n = SESSION_COUNTER.fetch_add(1, Ordering::SeqCst);
     format!("s{}", n)
+}
+
+// Per-session aggregated state: keeps the incremental sequence,
+// a buffer of recent outputs, and the set of subscribed window labels.
+#[derive(Clone, Default)]
+struct SessionState {
+    seq: u64,
+    buffer: VecDeque<TerminalOutput>,
+    subscribers: HashSet<String>,
+}
+
+#[derive(Clone, Serialize)]
+pub struct TerminalOutput {
+    pub seq: u64,
+    pub data: String,
+}
+
+static SESSIONS_STATE: OnceCell<Mutex<HashMap<String, SessionState>>> = OnceCell::new();
+static SESSIONS_BY_CWD: OnceCell<Mutex<HashMap<String, String>>> = OnceCell::new();
+
+fn sessions_state_map() -> &'static Mutex<HashMap<String, SessionState>> {
+    SESSIONS_STATE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn sessions_by_cwd_map() -> &'static Mutex<HashMap<String, String>> {
+    SESSIONS_BY_CWD.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
 #[cfg(target_os = "android")]
@@ -218,31 +245,65 @@ fn start_proot_session_internal(
     let session_id = generate_session_id();
 
     // spawn reader thread
-    {
-        let handle = app.clone();
-        let sid = session_id.clone();
-        thread::spawn(move || {
-            let mut reader = reader;
-            let mut buf = [0u8; 1024];
-            loop {
-                match reader.read(&mut buf) {
-                    Ok(0) => break,
-                    Ok(n) => {
-                        let s = String::from_utf8_lossy(&buf[..n]).to_string();
-                        if let Some(window) = handle.get_webview_window("main") {
-                            let _ = window.emit(&format!("terminal-output-{}", sid), s.clone());
-                        }
-                    }
-                    Err(_) => break,
-                }
+        // spawn reader thread which will push output into the per-session
+        // SessionState and broadcast typed TerminalOutput messages to the
+        // subscribed webview windows.
+        {
+            // ensure there is a session state entry before the reader runs
+            {
+                let mut ss = sessions_state_map().lock().map_err(|e| format!("锁错误: {e}"))?;
+                ss.insert(session_id.clone(), SessionState::default());
             }
-        });
-    }
+
+            let handle = app.clone();
+            let sid = session_id.clone();
+            thread::spawn(move || {
+                let mut reader = reader;
+                let mut buf = [0u8; 1024];
+                loop {
+                    match reader.read(&mut buf) {
+                        Ok(0) => break,
+                        Ok(n) => {
+                            let s = String::from_utf8_lossy(&buf[..n]).to_string();
+                            // update session state: increment seq, append to buffer,
+                            // and snapshot subscribers while holding the session map
+                            // lock briefly.
+                            let (out, subs) = {
+                                let mut ss = sessions_state_map().lock().unwrap();
+                                let state = ss.entry(sid.clone()).or_insert(SessionState::default());
+                                state.seq = state.seq.saturating_add(1);
+                                let seq = state.seq;
+                                let out = TerminalOutput { seq, data: s.clone() };
+                                state.buffer.push_back(out.clone());
+                                if state.buffer.len() > 1000 {
+                                    state.buffer.pop_front();
+                                }
+                                let subs = state.subscribers.iter().cloned().collect::<Vec<_>>();
+                                (out, subs)
+                            };
+
+                        for label in subs {
+                                if let Some(window) = handle.get_webview_window(&label) {
+                                    let _ = window.emit(&format!("terminal-output-{}", sid), out.clone());
+                                }
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+            });
+        }
 
     // store session
     {
         let mut map = sessions_map().lock().map_err(|e| format!("锁错误: {e}"))?;
         map.insert(session_id.clone(), (master, writer, child));
+    }
+
+    // register mapping from provided cwd_in_rootfs (if any) -> session id
+    if let Some(wd) = cwd_in_rootfs {
+        let mut by_cwd = sessions_by_cwd_map().lock().map_err(|e| format!("锁错误: {e}"))?;
+        by_cwd.insert(wd, session_id.clone());
     }
 
     Ok(session_id)
@@ -261,6 +322,28 @@ pub fn start_terminal_session(app: tauri::AppHandle, cwd: String) -> Result<Stri
     let cwd_path = PathBuf::from(&cwd);
     if !cwd_path.exists() || !cwd_path.is_dir() {
         return Err("工作目录不存在或不是目录".into());
+    }
+
+    // Use a canonicalized path as the reuse key so string differences
+    // (slashes, casing, symlinks) don't prevent reuse.
+    let canonical_key = match cwd_path.canonicalize() {
+        Ok(p) => p.to_string_lossy().to_string(),
+        Err(_) => cwd_path.to_string_lossy().to_string(),
+    };
+
+    // Try to reuse an existing session for this canonicalized cwd.
+    if let Some(existing_sid) = {
+        let by_cwd = sessions_by_cwd_map().lock().map_err(|e| format!("锁错误: {e}"))?;
+        by_cwd.get(&canonical_key).cloned()
+    } {
+        let map = sessions_map().lock().map_err(|e| format!("锁错误: {e}"))?;
+        if map.contains_key(&existing_sid) {
+            return Ok(existing_sid);
+        } else {
+            // stale mapping — remove it so we can create a fresh session
+            let mut by_cwd = sessions_by_cwd_map().lock().map_err(|e| format!("锁错误: {e}"))?;
+            by_cwd.remove(&canonical_key);
+        }
     }
 
     let pty_system = native_pty_system();
@@ -292,6 +375,12 @@ pub fn start_terminal_session(app: tauri::AppHandle, cwd: String) -> Result<Stri
 
     let session_id = generate_session_id();
 
+    // initialize per-session state
+    {
+        let mut ss = sessions_state_map().lock().map_err(|e| format!("锁错误: {e}"))?;
+        ss.insert(session_id.clone(), SessionState::default());
+    }
+
     {
         let handle = app.clone();
         let sid = session_id.clone();
@@ -303,8 +392,20 @@ pub fn start_terminal_session(app: tauri::AppHandle, cwd: String) -> Result<Stri
                     Ok(0) => break,
                     Ok(n) => {
                         let s = String::from_utf8_lossy(&buf[..n]).to_string();
-                        if let Some(window) = handle.get_webview_window("main") {
-                            let _ = window.emit(&format!("terminal-output-{}", sid), s.clone());
+                        let (out, subs) = {
+                            let mut ss = sessions_state_map().lock().unwrap();
+                            let state = ss.entry(sid.clone()).or_insert(SessionState::default());
+                            state.seq = state.seq.saturating_add(1);
+                            let seq = state.seq;
+                            let out = TerminalOutput { seq, data: s.clone() };
+                            state.buffer.push_back(out.clone());
+                            if state.buffer.len() > 1000 { state.buffer.pop_front(); }
+                            (out, state.subscribers.iter().cloned().collect::<Vec<_>>())
+                        };
+                        for label in subs {
+                            if let Some(window) = handle.get_webview_window(&label) {
+                                let _ = window.emit(&format!("terminal-output-{}", sid), out.clone());
+                            }
                         }
                     }
                     Err(_) => break,
@@ -316,6 +417,11 @@ pub fn start_terminal_session(app: tauri::AppHandle, cwd: String) -> Result<Stri
     {
         let mut map = sessions_map().lock().map_err(|e| format!("锁错误: {e}"))?;
         map.insert(session_id.clone(), (master, writer, child));
+    }
+    // register mapping from canonicalized cwd -> session for future reuse
+    {
+        let mut by_cwd = sessions_by_cwd_map().lock().map_err(|e| format!("锁错误: {e}"))?;
+        by_cwd.insert(canonical_key.clone(), session_id.clone());
     }
 
     Ok(session_id)
@@ -336,6 +442,31 @@ pub fn send_terminal_input(
     } else {
         Err("会话未找到".into())
     }
+}
+
+#[tauri::command]
+pub fn attach_terminal_session(window: tauri::Window, session_id: String) -> Result<Vec<TerminalOutput>, String> {
+    // register the window label as a subscriber and return the buffered
+    // terminal outputs for replay.
+    let label = window.label().to_string();
+    let items = {
+        let mut ss = sessions_state_map().lock().map_err(|e| format!("锁错误: {e}"))?;
+        let state = ss.entry(session_id.clone()).or_insert(SessionState::default());
+        state.subscribers.insert(label.clone());
+        let snapshot = state.buffer.iter().cloned().collect::<Vec<_>>();
+        snapshot
+    };
+    Ok(items)
+}
+
+#[tauri::command]
+pub fn detach_terminal_session(window: tauri::Window, session_id: String) -> Result<(), String> {
+    let label = window.label().to_string();
+    let mut ss = sessions_state_map().lock().map_err(|e| format!("锁错误: {e}"))?;
+    if let Some(state) = ss.get_mut(&session_id) {
+        state.subscribers.remove(&label);
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -367,6 +498,17 @@ pub fn stop_terminal_session(_app: tauri::AppHandle, session_id: String) -> Resu
     if let Some((_master, _writer, mut child)) = map.remove(&session_id) {
         let _ = child.kill();
         let _ = child.wait();
+        // clean up state and cwd mapping
+        {
+            let mut ss = sessions_state_map().lock().map_err(|e| format!("锁错误: {e}"))?;
+            ss.remove(&session_id);
+        }
+        {
+            let mut by_cwd = sessions_by_cwd_map().lock().map_err(|e| format!("锁错误: {e}"))?;
+            // remove any cwd entries that pointed to this session
+            let keys: Vec<String> = by_cwd.iter().filter_map(|(k, v)| if v == &session_id { Some(k.clone()) } else { None }).collect();
+            for k in keys { by_cwd.remove(&k); }
+        }
         Ok(())
     } else {
         Err("会话未找到".into())

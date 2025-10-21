@@ -21,6 +21,8 @@ pub fn run() {
             projects::create_project,
             terminal::start_terminal_session,
             terminal::send_terminal_input,
+            terminal::attach_terminal_session,
+            terminal::detach_terminal_session,
             terminal::resize_terminal,
             terminal::stop_terminal_session
         ])
