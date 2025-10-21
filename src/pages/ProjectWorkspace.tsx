@@ -1,5 +1,4 @@
-import type React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { css } from "@codemirror/lang-css";
@@ -21,7 +20,6 @@ import EditorPane from "./project-workspace/EditorPane";
 import BottomExplorer from "./project-workspace/BottomExplorer";
 import {
   COLUMN_IDS,
-  type BottomTabId,
   type ColumnId,
   type ColumnState,
   type CreateEntryType,
@@ -53,11 +51,9 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
     [projectPath],
   );
 
-  const [activeBottomTab, setActiveBottomTab] = useState<BottomTabId>("files");
-
   const [isSidebarOpen, setSidebarOpen] = useState(false);
-
   const [isExplorerOpen, setExplorerOpen] = useState(false);
+  const [activeBottomTab, setActiveBottomTab] = useState<"files" | "preview" | "terminal">("files");
 
   const [fileTreeVersion, setFileTreeVersion] = useState(0);
   const [fileTree, setFileTree] = useState<FileNode[]>([]);
@@ -118,7 +114,7 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
       const state = view.state;
       const sel = state.selection.main;
 
-      // If text is a pair like () {} [] <> "" '', insert both and place cursor between
+      // If text is a pair like () {} [] <> "" '' , insert both and place cursor between
       const pairs: Record<string, string> = {
         '(': ')',
         '[': ']',
@@ -150,7 +146,7 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
           scrollIntoView: true,
         });
       }
-      // focus editor DOM
+
       const dom = view.dom || view.contentDOM || view.scrollDOM;
       if (dom && typeof dom.focus === 'function') dom.focus();
     } catch (e) {
@@ -324,9 +320,44 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
     setPreviewReloadToken((token) => token + 1);
   }, []);
 
-  const refreshFileTree = useCallback(() => {
+  const suppressLoadingRef = React.useRef(false);
+  const fetchIdRef = React.useRef<number | null>(null);
+  const isFetchingRef = React.useRef(false);
+
+  const refreshFileTree = useCallback((silent = false) => {
+    if (silent) suppressLoadingRef.current = true;
     setFileTreeVersion((token) => token + 1);
   }, []);
+
+  // Auto-refresh file tree when explorer is open and files tab is active.
+  useEffect(() => {
+    // Only poll while the explorer is open and files tab selected.
+    if (!isExplorerOpen || activeBottomTab !== "files") return;
+
+    let cancelled = false;
+    const interval = window.setInterval(() => {
+      if (cancelled) return;
+      // Avoid triggering a refresh if a refresh is already running.
+      if (!isLoadingFileTree && !isFetchingRef.current) {
+        isFetchingRef.current = true;
+        refreshFileTree(true); // silent
+      }
+    }, 1000);
+
+  // Also refresh once when enabling auto-refresh (on open/switch to files)
+  refreshFileTree(true);
+
+    const onFocus = () => {
+      if (!isLoadingFileTree) refreshFileTree(true);
+    };
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [isExplorerOpen, activeBottomTab, isLoadingFileTree, refreshFileTree]);
 
   const toggleExplorer = useCallback(() => {
     setExplorerOpen(!isExplorerOpen);
@@ -520,21 +551,24 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
 
   useEffect(() => {
     let cancelled = false;
+    const currentFetchId = Date.now();
+    // store active fetch id so only the latest toggles loading state
+    fetchIdRef.current = currentFetchId;
 
-    setIsLoadingFileTree(true);
+    const wasSilent = suppressLoadingRef.current;
+    if (!wasSilent) {
+      setIsLoadingFileTree(true);
+    }
+    suppressLoadingRef.current = false;
     setFileTreeError(null);
 
     invoke<FileNode[]>("list_project_tree", { projectPath })
       .then((nodes) => {
-        if (cancelled) {
-          return;
-        }
+        if (cancelled) return;
         setFileTree(nodes);
       })
       .catch((error: unknown) => {
-        if (cancelled) {
-          return;
-        }
+        if (cancelled) return;
         const message =
           typeof error === "string"
             ? error
@@ -545,8 +579,14 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
         setFileTree([]);
       })
       .finally(() => {
-        if (!cancelled) {
+        if (cancelled) return;
+        // Only clear the loading indicator if this fetch is the most recent
+        if (fetchIdRef.current === currentFetchId && !wasSilent) {
           setIsLoadingFileTree(false);
+        }
+        // clear isFetchingRef only if this is the latest fetch
+        if (fetchIdRef.current === currentFetchId) {
+          isFetchingRef.current = false;
         }
       });
 
@@ -1010,7 +1050,7 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
       };
     });
   }, [activeColumn, projectPath]);
-  const isFilesTab = activeBottomTab === "files";
+  // removed local isFilesTab; BottomExplorer uses activeBottomTab
 
   useEffect(() => {
     if (activeBottomTab !== "preview") {
@@ -1201,12 +1241,11 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
         <BottomExplorer
           isExplorerOpen={isExplorerOpen}
           setActiveBottomTab={setActiveBottomTab}
+          activeBottomTab={activeBottomTab}
           isLoadingFileTree={isLoadingFileTree}
           isLoadingPreview={isLoadingPreview}
           toggleExplorer={toggleExplorer}
-          refreshFileTree={refreshFileTree}
           requestPreviewReload={requestPreviewReload}
-          isFilesTab={isFilesTab}
           previewUrl={previewUrl}
           previewError={previewError}
           columnOrder={columnOrder}
@@ -1230,6 +1269,7 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
           fileTree={fileTree}
           fileTreeError={fileTreeError}
           insertTextAtCursor={insertTextAtCursor}
+          projectPath={projectPath}
         />
 
         <EntryActionDialog

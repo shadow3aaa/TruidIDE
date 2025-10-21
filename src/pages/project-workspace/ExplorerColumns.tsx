@@ -40,6 +40,7 @@ type ExplorerColumnsProps = {
     columnId: ColumnId,
     node: FileNode,
   ) => void;
+  activeDirectoryDisplayPath?: string;
 };
 
 export function ExplorerColumns({
@@ -54,10 +55,34 @@ export function ExplorerColumns({
   onEntryPointerDown,
   onEntryPointerUp,
   onEntryContextMenu,
+  activeDirectoryDisplayPath,
 }: ExplorerColumnsProps) {
+  const colCount = columnOrder.length;
+  const activeIndex = columnOrder.findIndex((id) => id === activeColumn);
+  const overlayLeftPercent = colCount > 0 && activeIndex >= 0 ? (activeIndex / colCount) * 100 : 0;
+  const overlayWidthPercent = colCount > 0 ? 100 / colCount : 0;
   return (
-    <Card className="flex-row gap-0 h-full overflow-hidden">
-      {columnOrder.map((columnId, index) => {
+    <Card className="relative flex-row gap-0 h-full overflow-hidden">
+      {/* Absolute-positioned pill showing the current directory inside the card */}
+  <div className="absolute left-4 top-4 z-10">
+        <div className="inline-flex max-w-[36rem] items-center gap-2 truncate px-3 py-1 rounded-md bg-black text-white text-sm font-medium shadow-sm">
+          <span className="truncate">{activeDirectoryDisplayPath}</span>
+        </div>
+      </div>
+      {/* Focus overlay: a full-height background that matches the focused column and extends into the card's padded area */}
+      {activeIndex >= 0 && colCount > 0 ? (
+        <div aria-hidden className="absolute top-0 left-0 h-full w-full pointer-events-none">
+          <div
+            className={cn(
+              "absolute top-0 bottom-0 pointer-events-none bg-primary/5",
+              activeIndex === 0 ? "rounded-l-xl" : "",
+              activeIndex === colCount - 1 ? "rounded-r-xl" : "",
+            )}
+            style={{ left: `${overlayLeftPercent}%`, width: `${overlayWidthPercent}%` }}
+          />
+        </div>
+      ) : null}
+  {columnOrder.map((columnId) => {
         const data = columnComputed[columnId];
         const isColumnActive = activeColumn === columnId;
         const columnView = data.view;
@@ -67,11 +92,11 @@ export function ExplorerColumns({
 
         return (
           <Fragment key={columnId}>
-            {index > 0 ? <div className="w-px bg-border" /> : null}
+            {/* no vertical divider between columns - layout stays grid-like */}
             <div
               className={cn(
-                "flex min-w-0 flex-1 flex-col gap-2 py-3 px-4 transition",
-                isColumnActive ? "bg-primary/5" : "hover:bg-muted/10",
+                "relative z-10 flex min-w-0 flex-1 flex-col gap-2 pt-8 px-4 transition",
+                isColumnActive ? "" : "hover:bg-muted/10",
               )}
               onMouseDown={() => onColumnFocus(columnId)}
             >

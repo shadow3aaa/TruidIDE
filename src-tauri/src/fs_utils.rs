@@ -1,5 +1,8 @@
 use serde::Serialize;
-use std::{fs, io, path::{Path, PathBuf}};
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+};
 use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Manager};
 

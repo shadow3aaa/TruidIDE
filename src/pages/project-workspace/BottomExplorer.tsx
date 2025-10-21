@@ -1,3 +1,4 @@
+import React from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -9,17 +10,19 @@ import {
   Plus,
 } from "lucide-react";
 import { ExplorerColumns } from "./ExplorerColumns";
+import { Card, CardHeader } from "@/components/ui/card";
 import type { ColumnId, ColumnState } from "./types";
 
 type Props = {
   isExplorerOpen: boolean;
   setActiveBottomTab: (id: any) => void;
+  activeBottomTab: "files" | "preview" | "terminal";
   isLoadingFileTree: boolean;
   isLoadingPreview: boolean;
   toggleExplorer: () => void;
-  refreshFileTree: () => void;
+  // refreshFileTree removed from props — file tree is refreshed automatically now
   requestPreviewReload: () => void;
-  isFilesTab: boolean;
+  // isFilesTab removed - use activeBottomTab
   previewUrl: string | null;
   previewError: string | null;
   columnOrder: ColumnId[];
@@ -46,18 +49,20 @@ type Props = {
   fileTree: any[];
   fileTreeError: string | null;
   insertTextAtCursor?: (text: string) => void;
+  projectPath: string;
 };
 
 export function BottomExplorer(props: Props) {
   const {
     isExplorerOpen,
     setActiveBottomTab,
+    activeBottomTab,
     isLoadingFileTree,
     isLoadingPreview,
     toggleExplorer,
-    refreshFileTree,
+  // refreshFileTree removed from props — file tree is refreshed automatically now
     requestPreviewReload,
-    isFilesTab,
+    // isFilesTab removed
     columnOrder,
     columnComputed,
     activeColumn,
@@ -80,6 +85,11 @@ export function BottomExplorer(props: Props) {
     fileTreeError,
   } = props;
 
+  const isFilesTab = activeBottomTab === "files";
+  const isPreviewTab = activeBottomTab === "preview";
+  const isTerminalTab = activeBottomTab === "terminal";
+  const TerminalTabLazy = React.lazy(() => import("@/components/TerminalTab"));
+
   return (
     <section
       className={cn(
@@ -91,77 +101,97 @@ export function BottomExplorer(props: Props) {
       aria-expanded={isExplorerOpen}
     >
       <div className="flex flex-col px-4 pt-2 pb-2">
-        {isExplorerOpen ? (
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-1 rounded-full border bg-muted/60 p-1">
-              {/* tabs are controlled from parent; render placeholder buttons via setActiveBottomTab */}
-              <button
-                type="button"
-                onPointerDown={(e) => e.preventDefault()}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => setActiveBottomTab("files")}
-                className={cn(
-                  "rounded-full px-3 py-1 text-sm font-medium transition",
-                  isFilesTab
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-                aria-pressed={isFilesTab}
-              >
-                文件
-              </button>
-              <button
-                type="button"
-                onPointerDown={(e) => e.preventDefault()}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => setActiveBottomTab("preview")}
-                className={cn(
-                  "rounded-full px-3 py-1 text-sm font-medium transition",
-                  !isFilesTab
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-                aria-pressed={!isFilesTab}
-              >
-                预览
-              </button>
+        <div className="flex items-center justify-between gap-2">
+          {isExplorerOpen ? (
+            <div className="flex items-center gap-2 w-full">
+              <div className="flex items-center gap-1 rounded-full border bg-muted/60 p-1 w-full">
+                {/* left: tab buttons */}
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onPointerDown={(e) => e.preventDefault()}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => setActiveBottomTab("files")}
+                    className={cn(
+                      "rounded-full px-3 py-1 text-sm font-medium transition",
+                      isFilesTab
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                    aria-pressed={isFilesTab}
+                  >
+                    文件
+                  </button>
+                  <button
+                    type="button"
+                    onPointerDown={(e) => e.preventDefault()}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => setActiveBottomTab("preview")}
+                    className={cn(
+                      "rounded-full px-3 py-1 text-sm font-medium transition",
+                      isPreviewTab
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                    aria-pressed={isPreviewTab}
+                  >
+                    预览
+                  </button>
+                  <button
+                    type="button"
+                    onPointerDown={(e) => e.preventDefault()}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => setActiveBottomTab("terminal")}
+                    className={cn(
+                      "rounded-full px-3 py-1 text-sm font-medium transition",
+                      isTerminalTab
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                    aria-pressed={isTerminalTab}
+                  >
+                    终端
+                  </button>
+                </div>
+
+                {/* right: preview action + collapse button */}
+                <div className="ml-auto flex items-center gap-2">
+                  {isPreviewTab ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onPointerDown={(e) => e.preventDefault()}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={requestPreviewReload}
+                      disabled={isLoadingPreview}
+                    >
+                      {isLoadingPreview ? "加载中…" : "刷新预览"}
+                    </Button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onPointerDown={(e) => e.preventDefault()}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={toggleExplorer}
+                    className={cn(
+                      "inline-flex items-center justify-center rounded-full p-1",
+                      "text-muted-foreground hover:bg-muted/10",
+                    )}
+                    aria-label={isExplorerOpen ? "收起底部面板" : "展开底部面板"}
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              {isFilesTab ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onPointerDown={(e) => e.preventDefault()}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={refreshFileTree}
-                  disabled={isLoadingFileTree}
-                >
-                  {isLoadingFileTree ? "刷新中…" : "刷新"}
-                </Button>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onPointerDown={(e) => e.preventDefault()}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={requestPreviewReload}
-                  disabled={isLoadingPreview}
-                >
-                  {isLoadingPreview ? "加载中…" : "刷新预览"}
-                </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="flex-shrink-0"
-                onClick={toggleExplorer}
-              >
-                <ChevronDown className="h-5 w-5" />
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-start justify-between gap-4">
+          ) : (
+            <div />
+          )}
+        </div>
+
+        {/* Collapsed-only quick keys row */}
+        {!isExplorerOpen ? (
+          <div className="flex items-start justify-between gap-4 pt-2">
             <div className="flex flex-wrap items-center gap-2">
               {[
                 "[",
@@ -191,45 +221,62 @@ export function BottomExplorer(props: Props) {
                 </Button>
               ))}
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="flex-shrink-0"
-              onPointerDown={(e) => e.preventDefault()}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={toggleExplorer}
-            >
-              <ChevronUp className="h-5 w-5" />
-            </Button>
+            <div className="flex items-center">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="flex-shrink-0"
+                onPointerDown={(e) => e.preventDefault()}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={toggleExplorer}
+                aria-label="展开底部面板"
+              >
+                <ChevronUp className="h-5 w-5" />
+              </Button>
+            </div>
           </div>
-        )}
+        ) : null}
       </div>
-      <div className="relative flex-1 overflow-hidden px-4 pb-5 pt-4">
+  <div className="relative flex-1 overflow-hidden px-4 pb-5 pt-2">
         {isExplorerOpen && (
           <>
             {isFilesTab ? (
               <div className="flex h-full flex-col overflow-hidden">
-                <div className="px-2 pb-2 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">
-                    {activeDirectoryDisplayPath}
-                  </span>
-                </div>
-                <div className="flex-1 overflow-hidden px-2">
-                  {isLoadingFileTree ? (
-                    <div className="flex h-full items-center justify-center px-6 text-sm text-muted-foreground">
-                      正在读取项目结构…
-                    </div>
+                <div className="flex-1 overflow-hidden px-0">
+                  {isLoadingFileTree && fileTree.length === 0 ? (
+                    <Card className="h-full">
+                      <CardHeader className="px-4 pt-3 pb-0">
+                        <div className="inline-flex max-w-[36rem] items-center gap-2 truncate px-3 py-1 rounded-md bg-black text-white text-sm font-medium shadow-sm">
+                          <span className="truncate">{activeDirectoryDisplayPath}</span>
+                        </div>
+                      </CardHeader>
+                      <div className="flex h-full items-center justify-center px-6 text-sm text-muted-foreground">
+                        正在读取项目结构…
+                      </div>
+                    </Card>
                   ) : fileTreeError ? (
-                    <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-                      <p className="text-sm text-destructive">
-                        {fileTreeError}
-                      </p>
-                    </div>
+                    <Card className="h-full">
+                      <CardHeader className="px-4 pt-3 pb-0">
+                        <div className="inline-flex max-w-[36rem] items-center gap-2 truncate px-3 py-1 rounded-md bg-black text-white text-sm font-medium shadow-sm">
+                          <span className="truncate">{activeDirectoryDisplayPath}</span>
+                        </div>
+                      </CardHeader>
+                      <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+                        <p className="text-sm text-destructive">{fileTreeError}</p>
+                      </div>
+                    </Card>
                   ) : fileTree.length === 0 ? (
-                    <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-sm text-muted-foreground">
-                      <p>项目中尚无文件或目录。</p>
-                      <p>使用底部加号即可创建新文件或文件夹。</p>
-                    </div>
+                    <Card className="h-full">
+                      <CardHeader className="px-4 pt-3 pb-0">
+                        <div className="inline-flex max-w-[36rem] items-center gap-2 truncate px-3 py-1 rounded-md bg-black text-white text-sm font-medium shadow-sm">
+                          <span className="truncate">{activeDirectoryDisplayPath}</span>
+                        </div>
+                      </CardHeader>
+                      <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-sm text-muted-foreground">
+                        <p>项目中尚无文件或目录。</p>
+                        <p>使用底部加号即可创建新文件或文件夹。</p>
+                      </div>
+                    </Card>
                   ) : (
                     <ExplorerColumns
                       columnOrder={columnOrder}
@@ -243,6 +290,7 @@ export function BottomExplorer(props: Props) {
                       onEntryPointerDown={onEntryPointerDown}
                       onEntryPointerUp={onEntryPointerUp}
                       onEntryContextMenu={onEntryContextMenu}
+                      activeDirectoryDisplayPath={activeDirectoryDisplayPath}
                     />
                   )}
                 </div>
@@ -297,7 +345,7 @@ export function BottomExplorer(props: Props) {
                   </div>
                 </div>
               </div>
-            ) : (
+            ) : isPreviewTab ? (
               <div className="h-full overflow-hidden rounded-xl border bg-card shadow-sm">
                 {isLoadingPreview ? (
                   <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-sm text-muted-foreground">
@@ -332,6 +380,12 @@ export function BottomExplorer(props: Props) {
                     </p>
                   </div>
                 )}
+              </div>
+            ) : (
+              <div className="h-full overflow-hidden rounded-xl border bg-card shadow-sm">
+                <React.Suspense fallback={<div className="p-4">正在加载终端…</div>}>
+                  <TerminalTabLazy projectPath={props.projectPath} />
+                </React.Suspense>
               </div>
             )}
           </>

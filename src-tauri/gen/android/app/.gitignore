@@ -1,5 +1,6 @@
 /src/main/java/com/shadow3aaa/truidide/generated
 /src/main/jniLibs/**/*.so
+!/src/main/jniLibs/**/libassets.so
 /src/main/assets/tauri.conf.json
 /tauri.build.gradle.kts
 /proguard-tauri.pro

@@ -20,9 +20,12 @@ android {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
         applicationId = "com.shadow3aaa.truidide"
         minSdk = 24
-        targetSdk = 36
+        targetSdk = 28
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
+    }
+    lint {
+        disable += "ExpiredTargetSdkVersion"
     }
     buildTypes {
         getByName("debug") {
