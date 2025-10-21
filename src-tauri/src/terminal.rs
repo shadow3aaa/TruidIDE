@@ -164,6 +164,9 @@ fn start_proot_session_internal(
     let _ = fs::create_dir(&tmp_dir);
     cmd.env("PROOT_TMP_DIR", tmp_dir.to_string_lossy().as_ref());
 
+    cmd.env("TERM", "xterm-256color");
+    cmd.env("COLORTERM", "truecolor");
+
     cmd.arg(format!("--rootfs={}", rootfs_dir.to_string_lossy()));
 
     if let Some(wd) = cwd_in_rootfs {
