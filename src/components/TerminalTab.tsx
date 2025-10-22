@@ -33,11 +33,26 @@ export default function TerminalTab({ projectPath }: Props) {
   const attachTokenRef = useRef(0);
   const lastSeqRef = useRef<number>(0);
   const [sessionIds, setSessionIds] = useState<string[]>([]);
-  const [sessionTitles, setSessionTitles] = useState<Record<string, string>>({});
+  const [sessionTitles, setSessionTitles] = useState<Record<string, string>>(
+    {},
+  );
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isCtrlLocked, setIsCtrlLocked] = useState(false);
+  const [isAltLocked, setIsAltLocked] = useState(false);
+  const ctrlLockedRef = useRef(isCtrlLocked);
+  const altLockedRef = useRef(isAltLocked);
+  const suppressNextDataRef = useRef(false);
   const menuContainerRef = useRef<HTMLDivElement | null>(null);
   const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    ctrlLockedRef.current = isCtrlLocked;
+  }, [isCtrlLocked]);
+
+  useEffect(() => {
+    altLockedRef.current = isAltLocked;
+  }, [isAltLocked]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -47,13 +62,17 @@ export default function TerminalTab({ projectPath }: Props) {
   }, []);
 
   useEffect(() => {
-    
-
     // Build a small initial theme using root-level CSS variables. This
     // is used to seed the terminal immediately so the renderer does not
     // draw with the default black background at first paint.
-    const initialBackground = resolveVar("--color-card", resolveVar("--color-background", "#000"));
-    const initialForeground = resolveVar("--color-card-foreground", resolveVar("--color-foreground", "#fff"));
+    const initialBackground = resolveVar(
+      "--color-card",
+      resolveVar("--color-background", "#000"),
+    );
+    const initialForeground = resolveVar(
+      "--color-card-foreground",
+      resolveVar("--color-foreground", "#fff"),
+    );
     const initialPrimary = resolveVar("--color-primary", initialForeground);
     const initialTheme = {
       background: initialBackground,
@@ -94,6 +113,12 @@ export default function TerminalTab({ projectPath }: Props) {
     });
 
     const dataDisposable = term.onData((data) => {
+      // If a physical key was handled by onKey and we intentionally
+      // suppressed the following onData event, skip this data once.
+      if (suppressNextDataRef.current) {
+        suppressNextDataRef.current = false;
+        return;
+      }
       const activeSid = sessionIdRef.current;
       if (!activeSid) return;
       invoke("send_terminal_input", {
@@ -102,6 +127,71 @@ export default function TerminalTab({ projectPath }: Props) {
           input: data,
         },
       }).catch(() => {});
+    });
+
+    // Intercept physical keyboard input so sticky Ctrl/Alt applies to it as well.
+    // Uses refs to read latest locked state inside the callback.
+    const keyDisposable = term.onKey(({ domEvent }) => {
+      const activeSid = sessionIdRef.current;
+      if (!activeSid) return;
+      try {
+        const k = domEvent.key;
+        // Only handle single-character printable keys
+        if (
+          typeof k === "string" &&
+          k.length === 1 &&
+          (ctrlLockedRef.current || altLockedRef.current)
+        ) {
+          let payload = k;
+          // apply ctrl
+          if (ctrlLockedRef.current) {
+            const upper = k.toUpperCase();
+            if (upper >= "A" && upper <= "Z") {
+              payload = String.fromCharCode(upper.charCodeAt(0) - 64);
+            } else if (k === " ") {
+              payload = "\u0000";
+            }
+          }
+          // apply alt (prefix ESC)
+          if (altLockedRef.current) {
+            payload = `\u001b${payload}`;
+          }
+
+          // prevent duplicate handling by xterm's default: stop the DOM event
+          try {
+            domEvent.preventDefault();
+            domEvent.stopPropagation();
+            if (
+              typeof (domEvent as any).stopImmediatePropagation === "function"
+            ) {
+              (domEvent as any).stopImmediatePropagation();
+            }
+            // Also defensively set returnValue
+            try {
+              (domEvent as any).returnValue = false;
+            } catch (e) {
+              /* ignore */
+            }
+          } catch (e) {
+            // ignore
+          }
+
+          // mark that the next onData event (if any) should be ignored because
+          // we've already handled this key and sent a modified payload.
+          suppressNextDataRef.current = true;
+
+          // send payload to backend terminal
+          invoke("send_terminal_input", {
+            args: { sessionId: activeSid, input: payload },
+          }).catch(() => {});
+
+          // reset sticky modifiers
+          setIsCtrlLocked(false);
+          setIsAltLocked(false);
+        }
+      } catch (e) {
+        // swallow
+      }
     });
 
     // Helper: resolve a CSS variable to a computed RGB(A) string by
@@ -118,12 +208,19 @@ export default function TerminalTab({ projectPath }: Props) {
         document.body.appendChild(probe);
         const resolved = getComputedStyle(probe).backgroundColor;
         document.body.removeChild(probe);
-        if (resolved && resolved !== "rgba(0, 0, 0, 0)" && resolved !== "transparent") return resolved;
+        if (
+          resolved &&
+          resolved !== "rgba(0, 0, 0, 0)" &&
+          resolved !== "transparent"
+        )
+          return resolved;
       } catch (e) {
         // fallthrough to raw variable read
       }
       try {
-        const raw = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+        const raw = getComputedStyle(document.documentElement)
+          .getPropertyValue(varName)
+          .trim();
         if (raw) return raw;
       } catch (e) {
         // ignore
@@ -156,20 +253,32 @@ export default function TerminalTab({ projectPath }: Props) {
         const isTransparent = (v?: string) => {
           if (!v) return true;
           const s = v.trim();
-          return s === "transparent" || s === "rgba(0, 0, 0, 0)" || s === "rgba(0,0,0,0)";
+          return (
+            s === "transparent" ||
+            s === "rgba(0, 0, 0, 0)" ||
+            s === "rgba(0,0,0,0)"
+          );
         };
 
         let background = computed.backgroundColor;
         if (isTransparent(background)) {
-          background = resolveVar("--color-card", "") || resolveVar("--color-background", "") || "#000";
+          background =
+            resolveVar("--color-card", "") ||
+            resolveVar("--color-background", "") ||
+            "#000";
         }
 
         let foreground = computed.color;
         if (isTransparent(foreground)) {
-          foreground = resolveVar("--color-card-foreground", "") || resolveVar("--color-foreground", "#fff");
+          foreground =
+            resolveVar("--color-card-foreground", "") ||
+            resolveVar("--color-foreground", "#fff");
         }
 
-        const primary = resolveVar("--color-primary", resolveVar("--primary", foreground));
+        const primary = resolveVar(
+          "--color-primary",
+          resolveVar("--primary", foreground),
+        );
         const destructive = resolveVar("--destructive", "#ff5f6d");
         const chart2 = resolveVar("--chart-2", "#66d9ef");
         const chart3 = resolveVar("--chart-3", "#c792ea");
@@ -220,9 +329,13 @@ export default function TerminalTab({ projectPath }: Props) {
           if (root) {
             root.style.backgroundColor = background;
             root.style.color = foreground;
-            const viewport = root.querySelector(".xterm-viewport") as HTMLElement | null;
+            const viewport = root.querySelector(
+              ".xterm-viewport",
+            ) as HTMLElement | null;
             if (viewport) viewport.style.backgroundColor = background;
-            const screen = root.querySelector(".xterm-screen, .xterm-rows") as HTMLElement | null;
+            const screen = root.querySelector(
+              ".xterm-screen, .xterm-rows",
+            ) as HTMLElement | null;
             if (screen) screen.style.color = foreground;
             // canvases may be used by some renderers; give them a matching
             // CSS background so the page doesn't show solid black behind
@@ -319,13 +432,16 @@ export default function TerminalTab({ projectPath }: Props) {
         attributeFilter: ["class"],
       });
       if (document.body) {
-        themeObserver.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+        themeObserver.observe(document.body, {
+          attributes: true,
+          attributeFilter: ["class"],
+        });
       }
     } catch (e) {
       // ignore if observation not permitted in some environments
     }
 
-   return () => {
+    return () => {
       window.removeEventListener("resize", handleResize);
       try {
         // cancel RAF if still pending
@@ -340,6 +456,11 @@ export default function TerminalTab({ projectPath }: Props) {
       }
       try {
         term.dispose();
+      } catch (e) {
+        // ignore
+      }
+      try {
+        keyDisposable.dispose();
       } catch (e) {
         // ignore
       }
@@ -448,7 +569,8 @@ export default function TerminalTab({ projectPath }: Props) {
           const payload = (event as any).payload ?? null;
           if (!payload) return;
           const seq = typeof payload.seq === "number" ? payload.seq : NaN;
-          const data = typeof payload.data === "string" ? payload.data : String(payload);
+          const data =
+            typeof payload.data === "string" ? payload.data : String(payload);
           if (!Number.isNaN(seq) && seq > lastSeqRef.current) {
             try {
               term.write(data);
@@ -486,10 +608,16 @@ export default function TerminalTab({ projectPath }: Props) {
       lastSeqRef.current = 0;
 
       try {
-        const snapshot = await invoke<TerminalChunk[]>("attach_terminal_session", {
-          args: { sessionId },
-        });
-        if (attachTokenRef.current === token && sessionIdRef.current === sessionId) {
+        const snapshot = await invoke<TerminalChunk[]>(
+          "attach_terminal_session",
+          {
+            args: { sessionId },
+          },
+        );
+        if (
+          attachTokenRef.current === token &&
+          sessionIdRef.current === sessionId
+        ) {
           try {
             term.reset();
           } catch (_) {
@@ -507,12 +635,18 @@ export default function TerminalTab({ projectPath }: Props) {
           }
         }
       } catch (error) {
-        if (attachTokenRef.current === token && sessionIdRef.current === sessionId) {
+        if (
+          attachTokenRef.current === token &&
+          sessionIdRef.current === sessionId
+        ) {
           term.writeln("无法附加到终端会话：" + String(error));
         }
       }
 
-      if (attachTokenRef.current !== token || sessionIdRef.current !== sessionId) {
+      if (
+        attachTokenRef.current !== token ||
+        sessionIdRef.current !== sessionId
+      ) {
         return;
       }
 
@@ -671,7 +805,67 @@ export default function TerminalTab({ projectPath }: Props) {
       disposed = true;
       detachCurrentSession().catch(() => {});
     };
-  }, [projectPath, attachToSession, createSession, detachCurrentSession, refreshSessions]);
+  }, [
+    projectPath,
+    attachToSession,
+    createSession,
+    detachCurrentSession,
+    refreshSessions,
+  ]);
+
+  useEffect(() => {
+    if (!activeSessionId) {
+      setIsCtrlLocked(false);
+      setIsAltLocked(false);
+    }
+  }, [activeSessionId]);
+
+  const sendTerminalInput = useCallback(async (input: string) => {
+    const sessionId = sessionIdRef.current;
+    if (!sessionId) return;
+    termRef.current?.focus();
+    try {
+      await invoke("send_terminal_input", {
+        args: { sessionId, input },
+      });
+    } catch {
+      // no-op: best effort fire-and-forget
+    }
+  }, []);
+
+  const handleSequenceClick = useCallback(
+    (sequence: string) => {
+      void sendTerminalInput(sequence);
+    },
+    [sendTerminalInput],
+  );
+
+  // termux风格两排布局，按钮大小统一，顺序参考termux
+  // 两排各 10 个按钮，倒 T 形箭头布局：UP 在第一排的索引 4，第二排索引 4 为 DOWN，左右在 3/5。
+  // PGUP/PGDN 在同一列（索引 8）上下对齐。
+  const termuxRows = useMemo(
+    () => [
+      [
+        { id: "esc", label: "ESC", type: "seq", sequence: "\u001b" },
+        { id: "alt", label: "ALT", type: "alt" },
+        { id: "arrow-up", label: "↑", type: "seq", sequence: "\u001b[A" },
+        { id: "tab", label: "TAB", type: "seq", sequence: "\t" },
+        { id: "pgup", label: "PGUP", type: "seq", sequence: "\u001b[5~" },
+        { id: "home", label: "HOME", type: "seq", sequence: "\u001b[H" },
+      ],
+      [
+        { id: "ctrl", label: "CTRL", type: "ctrl" },
+        { id: "arrow-left", label: "←", type: "seq", sequence: "\u001b[D" },
+        { id: "arrow-down", label: "↓", type: "seq", sequence: "\u001b[B" },
+        { id: "arrow-right", label: "→", type: "seq", sequence: "\u001b[C" },
+        { id: "pgdn", label: "PGDN", type: "seq", sequence: "\u001b[6~" },
+        { id: "end", label: "END", type: "seq", sequence: "\u001b[F" },
+      ],
+    ],
+    [],
+  );
+
+  const hasActiveSession = Boolean(activeSessionId);
 
   const activeDisplayTitle = useMemo(() => {
     if (!activeSessionId) return DEFAULT_TITLE;
@@ -707,7 +901,10 @@ export default function TerminalTab({ projectPath }: Props) {
               {activeDisplayTitle}
             </span>
             <ChevronDown
-              className={cn("ml-2 h-4 w-4 transition-transform", isMenuOpen && "rotate-180")}
+              className={cn(
+                "ml-2 h-4 w-4 transition-transform",
+                isMenuOpen && "rotate-180",
+              )}
               aria-hidden
             />
           </button>
@@ -715,7 +912,9 @@ export default function TerminalTab({ projectPath }: Props) {
             <div className="absolute left-0 top-full z-20 mt-2 w-64 rounded-md border bg-card shadow-lg">
               <div className="max-h-64 overflow-y-auto py-1" role="menu">
                 {sessionIds.length === 0 ? (
-                  <div className="px-3 py-2 text-sm text-muted-foreground">暂无终端会话</div>
+                  <div className="px-3 py-2 text-sm text-muted-foreground">
+                    暂无终端会话
+                  </div>
                 ) : (
                   sessionIds.map((id, index) => {
                     const display = getDisplayName(id, index);
@@ -770,6 +969,107 @@ export default function TerminalTab({ projectPath }: Props) {
         </div>
       </div>
       <div ref={containerRef} className="flex-1 overflow-hidden bg-card" />
+      {/* termux 风格两排卡片式快捷栏 */}
+      <div className="border-t border-border/60 bg-muted/40 p-0 select-none">
+        <div className="flex flex-col items-center w-full p-0 m-0 gap-0">
+          {termuxRows.map((row, rowIdx) => (
+            <div
+              key={rowIdx}
+              className="flex flex-row w-full p-0 m-0 gap-0"
+              style={{ borderSpacing: 0 }}
+            >
+              {row.map((item) => {
+                // termux风格：每个按钮等分宽度
+                const baseClass =
+                  "truid-termux-key flex-1 flex items-center justify-center h-8 m-0 bg-white text-[11px] font-medium select-none transition active:scale-95 cursor-pointer";
+                const disabledClass = !hasActiveSession
+                  ? "opacity-50 pointer-events-none"
+                  : "";
+                const highlightClass =
+                  (item.type === "ctrl" && isCtrlLocked) ||
+                  (item.type === "alt" && isAltLocked)
+                    ? "truid-termux-key-active"
+                    : "";
+                const handleClick = () => {
+                  if (!hasActiveSession) return;
+                  if (item.type === "ctrl") setIsCtrlLocked((prev) => !prev);
+                  else if (item.type === "alt") setIsAltLocked((prev) => !prev);
+                  else if (item.type === "seq")
+                    handleSequenceClick(item.sequence!);
+                  // Ensure terminal regains focus after clicking any shortcut so physical
+                  // keyboard input (and sticky modifiers) continue to work.
+                  try {
+                    termRef.current?.focus();
+                  } catch (e) {
+                    // ignore
+                  }
+                };
+                return (
+                  <div
+                    key={item.id}
+                    className={cn(baseClass, highlightClass, disabledClass)}
+                    tabIndex={0}
+                    role="button"
+                    aria-pressed={
+                      item.type === "ctrl"
+                        ? isCtrlLocked
+                        : item.type === "alt"
+                          ? isAltLocked
+                          : undefined
+                    }
+                    aria-label={item.label}
+                    title={item.label}
+                    onClick={handleClick}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        handleClick();
+                      }
+                    }}
+                    style={{ minWidth: 0 }}
+                  >
+                    {item.label}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+        {/* termux风格卡片按钮样式 */}
+        <style>{`
+          .truid-termux-key {
+            background: #fff;
+            border: none;
+            border-radius: 0;
+            box-shadow: none;
+            margin: 0;
+            user-select: none;
+            touch-action: manipulation;
+            transition: background 0.15s, color 0.15s, transform 0.1s;
+            min-width: 0;
+            min-height: 24px;
+            max-height: 28px;
+            font-size: 11px;
+            letter-spacing: 0.01em;
+            font-family: inherit;
+            font-weight: 500;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            color: #222;
+          }
+          .truid-termux-key:active {
+            background: #f3f3f3;
+            transform: scale(0.97);
+          }
+          .truid-termux-key-active {
+            background: #111 !important;
+            color: #fff !important;
+          }
+        `}</style>
+      </div>
     </div>
   );
 }
