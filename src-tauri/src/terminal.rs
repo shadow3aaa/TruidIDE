@@ -196,7 +196,7 @@ fn start_proot_session_internal(
 
     cmd.arg(format!("--rootfs={}", rootfs_dir.to_string_lossy()));
 
-    if let Some(wd) = cwd_in_rootfs {
+    if let Some(ref wd) = cwd_in_rootfs {
         let guest_path = PathBuf::from("/mnt/project");
         let full_guest_path = rootfs_dir.join(guest_path.strip_prefix("/").unwrap());
         let _ = fs::create_dir_all(&full_guest_path);
@@ -301,9 +301,9 @@ fn start_proot_session_internal(
     }
 
     // register mapping from provided cwd_in_rootfs (if any) -> session id
-    if let Some(wd) = cwd_in_rootfs {
+    if let Some(ref wd) = cwd_in_rootfs {
         let mut by_cwd = sessions_by_cwd_map().lock().map_err(|e| format!("锁错误: {e}"))?;
-        by_cwd.insert(wd, session_id.clone());
+        by_cwd.insert(wd.to_string(), session_id.clone());
     }
 
     Ok(session_id)
