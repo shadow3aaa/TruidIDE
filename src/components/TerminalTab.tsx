@@ -1,20 +1,50 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import "xterm/css/xterm.css";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { ChevronDown, Plus, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type Props = {
   projectPath: string;
+};
+
+const DEFAULT_TITLE = "终端";
+
+type SessionInfo = {
+  sessionId: string;
+  title?: string | null;
+  cwd: string;
+};
+
+type TerminalChunk = {
+  seq: number;
+  data: string;
 };
 
 export default function TerminalTab({ projectPath }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [running, setRunning] = useState(false);
+  const sessionIdRef = useRef<string | null>(null);
+  const unlistenRef = useRef<UnlistenFn | null>(null);
+  const attachTokenRef = useRef(0);
+  const lastSeqRef = useRef<number>(0);
+  const [sessionIds, setSessionIds] = useState<string[]>([]);
+  const [sessionTitles, setSessionTitles] = useState<Record<string, string>>({});
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuContainerRef = useRef<HTMLDivElement | null>(null);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     
@@ -44,6 +74,35 @@ export default function TerminalTab({ projectPath }: Props) {
     term.loadAddon(fit);
     termRef.current = term;
     fitRef.current = fit;
+
+    // Use terminal-provided title sequences (like VSCode) instead of parsing stdin.
+    const titleDisposable = term.onTitleChange((nextTitle) => {
+      const activeSid = sessionIdRef.current;
+      if (!activeSid) return;
+      const raw = typeof nextTitle === "string" ? nextTitle.trim() : "";
+      setSessionTitles((prev) => {
+        const existing = prev[activeSid];
+        if (existing === raw) return prev;
+        return { ...prev, [activeSid]: raw };
+      });
+      invoke("set_terminal_session_title", {
+        args: {
+          sessionId: activeSid,
+          title: raw.length > 0 ? raw : null,
+        },
+      }).catch(() => {});
+    });
+
+    const dataDisposable = term.onData((data) => {
+      const activeSid = sessionIdRef.current;
+      if (!activeSid) return;
+      invoke("send_terminal_input", {
+        args: {
+          sessionId: activeSid,
+          input: data,
+        },
+      }).catch(() => {});
+    });
 
     // Helper: resolve a CSS variable to a computed RGB(A) string by
     // creating a tiny hidden element and reading its computed style.
@@ -229,8 +288,11 @@ export default function TerminalTab({ projectPath }: Props) {
         // best-effort: use public cols/rows
         const cols = term.cols ?? null;
         const rows = term.rows ?? null;
-        if (sessionId && cols && rows) {
-          invoke("resize_terminal", { session_id: sessionId, cols, rows }).catch(() => {});
+        const activeSessionId = sessionIdRef.current;
+        if (activeSessionId && cols && rows) {
+          invoke("resize_terminal", {
+            args: { sessionId: activeSessionId, cols, rows },
+          }).catch(() => {});
         }
       } catch (e) {
         // ignore
@@ -263,7 +325,7 @@ export default function TerminalTab({ projectPath }: Props) {
       // ignore if observation not permitted in some environments
     }
 
-    return () => {
+   return () => {
       window.removeEventListener("resize", handleResize);
       try {
         // cancel RAF if still pending
@@ -281,105 +343,433 @@ export default function TerminalTab({ projectPath }: Props) {
       } catch (e) {
         // ignore
       }
+      try {
+        dataDisposable.dispose();
+      } catch (e) {
+        // ignore
+      }
+      try {
+        titleDisposable.dispose();
+      } catch (e) {
+        // ignore
+      }
       termRef.current = null;
       fitRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    const term = termRef.current;
-    if (!term) return;
+  const getDisplayName = useCallback(
+    (sessionId: string, index: number) => {
+      const raw = sessionTitles[sessionId];
+      if (raw && raw.trim().length > 0) {
+        return raw.trim();
+      }
+      if (sessionIds.length > 1) {
+        return `${DEFAULT_TITLE} ${index + 1}`;
+      }
+      return DEFAULT_TITLE;
+    },
+    [sessionTitles, sessionIds],
+  );
 
-  let unlisten: UnlistenFn | null = null;
-  let mountedSid: string | null = null;
-  const lastSeqRef = { current: 0 } as { current: number };
+  const refreshSessions = useCallback(async () => {
+    try {
+      const infos = await invoke<SessionInfo[]>("list_terminal_sessions", {
+        cwd: projectPath,
+      });
+      if (!isMountedRef.current) return [] as string[];
+      const ids = infos.map((info) => info.sessionId);
+      const nextTitles: Record<string, string> = {};
+      for (const info of infos) {
+        const raw = typeof info.title === "string" ? info.title : "";
+        nextTitles[info.sessionId] = raw ? raw.trim() : "";
+      }
+      setSessionIds(ids);
+      setSessionTitles(nextTitles);
+      return ids;
+    } catch (error) {
+      if (isMountedRef.current) {
+        setSessionIds([]);
+        setSessionTitles({});
+      }
+      const term = termRef.current;
+      if (term) {
+        term.writeln("无法获取终端会话：" + String(error));
+      }
+      return [];
+    }
+  }, [projectPath]);
 
-    const start = async () => {
+  const detachCurrentSession = useCallback(async () => {
+    const current = sessionIdRef.current;
+    if (!current) return;
+    if (unlistenRef.current) {
       try {
-        const sid: string = await invoke("start_terminal_session", { cwd: projectPath });
-  setSessionId(sid);
-  mountedSid = sid;
-        setRunning(true);
+        unlistenRef.current();
+      } catch (_) {
+        // ignore
+      }
+      unlistenRef.current = null;
+    }
+    sessionIdRef.current = null;
+    lastSeqRef.current = 0;
+    try {
+      await invoke("detach_terminal_session", { args: { sessionId: current } });
+    } catch (_) {
+      // ignore
+    }
+  }, []);
 
-        // register a listener first so we won't miss events emitted after
-        // we attach; payloads are expected to be objects { seq, data }.
-        unlisten = await listen(`terminal-output-${sid}`, (event) => {
-          try {
-            const payload = (event as any).payload ?? null;
-            if (!payload) return;
-            const seq = typeof payload.seq === "number" ? payload.seq : NaN;
-            const data = typeof payload.data === "string" ? payload.data : String(payload);
-            if (!Number.isNaN(seq) && seq > lastSeqRef.current) {
-              term.write(data);
-              lastSeqRef.current = seq;
-            }
-          } catch (e) {
-            // ignore
-          }
-        });
+  const attachToSession = useCallback(
+    async (sessionId: string) => {
+      const term = termRef.current;
+      if (!term) return;
 
-        // register subscription and replay buffered output
+      if (sessionIdRef.current === sessionId) {
+        setActiveSessionId(sessionId);
+        setIsMenuOpen(false);
         try {
-          const snapshot: Array<{ seq: number; data: string }> = await invoke("attach_terminal_session", { sessionId: sid });
-          
-          for (const item of snapshot) {
-            if (typeof item.seq === "number" && item.seq > lastSeqRef.current) {
-              try { term.write(item.data); } catch (e) { /* ignore */ }
-              lastSeqRef.current = item.seq;
-            }
-          }
-        } catch (e) {
-          // attach failed — surface a small message but keep connection
-          try { term.writeln("无法附加到终端会话：" + String(e)); } catch (e) {}
-        }
-
-        term.onData((data) => {
-          if (!sid) return;
-          invoke("send_terminal_input", { sessionId: sid, input: data }).catch(() => {});
-        });
-
-        // initial resize
-        try {
-          const fit = fitRef.current;
-          fit?.fit();
-          try { term.focus(); } catch (e) { /* ignore */ }
-          const cols = term.cols;
-          const rows = term.rows;
-            await invoke("resize_terminal", { sessionId: sid, cols, rows });
+          term.focus();
         } catch (_) {
           // ignore
         }
-      } catch (e) {
-        term.writeln("无法启动终端会话：" + String(e));
+        return;
       }
-    };
 
-    start();
+      const token = attachTokenRef.current + 1;
+      attachTokenRef.current = token;
 
-    return () => {
-      if (unlisten) {
+      await detachCurrentSession();
+
+      const handler = (event: any) => {
+        if (attachTokenRef.current !== token) return;
         try {
-          unlisten();
-        } catch (e) {
+          const payload = (event as any).payload ?? null;
+          if (!payload) return;
+          const seq = typeof payload.seq === "number" ? payload.seq : NaN;
+          const data = typeof payload.data === "string" ? payload.data : String(payload);
+          if (!Number.isNaN(seq) && seq > lastSeqRef.current) {
+            try {
+              term.write(data);
+            } catch (_) {
+              // ignore write errors
+            }
+            lastSeqRef.current = seq;
+          }
+        } catch (_) {
           // ignore
         }
+      };
+
+      let unlisten: UnlistenFn | null = null;
+      try {
+        unlisten = await listen(`terminal-output-${sessionId}`, handler);
+      } catch (error) {
+        term.writeln("无法监听终端输出：" + String(error));
+        return;
       }
-      // detach rather than stop so the backend session can persist
-      if (mountedSid) {
-        invoke("detach_terminal_session", { sessionId: mountedSid }).catch(() => {});
+
+      if (attachTokenRef.current !== token) {
+        if (unlisten) {
+          try {
+            unlisten();
+          } catch (_) {
+            // ignore
+          }
+        }
+        return;
+      }
+
+      sessionIdRef.current = sessionId;
+      unlistenRef.current = unlisten;
+      lastSeqRef.current = 0;
+
+      try {
+        const snapshot = await invoke<TerminalChunk[]>("attach_terminal_session", {
+          args: { sessionId },
+        });
+        if (attachTokenRef.current === token && sessionIdRef.current === sessionId) {
+          try {
+            term.reset();
+          } catch (_) {
+            // ignore
+          }
+          for (const item of snapshot) {
+            if (typeof item.seq === "number" && item.seq > lastSeqRef.current) {
+              try {
+                term.write(item.data);
+              } catch (_) {
+                // ignore
+              }
+              lastSeqRef.current = item.seq;
+            }
+          }
+        }
+      } catch (error) {
+        if (attachTokenRef.current === token && sessionIdRef.current === sessionId) {
+          term.writeln("无法附加到终端会话：" + String(error));
+        }
+      }
+
+      if (attachTokenRef.current !== token || sessionIdRef.current !== sessionId) {
+        return;
+      }
+
+      setActiveSessionId(sessionId);
+      setIsMenuOpen(false);
+
+      try {
+        term.focus();
+      } catch (_) {
+        // ignore
+      }
+
+      try {
+        fitRef.current?.fit();
+        const cols = term.cols;
+        const rows = term.rows;
+        if (cols && rows) {
+          await invoke("resize_terminal", {
+            args: {
+              sessionId,
+              cols,
+              rows,
+            },
+          });
+        }
+      } catch (_) {
+        // ignore
+      }
+    },
+    [detachCurrentSession],
+  );
+
+  const createSession = useCallback(
+    async (forceNew: boolean) => {
+      try {
+        const sid: string = await invoke("start_terminal_session", {
+          args: { cwd: projectPath, forceNew: forceNew },
+        });
+        const ids = await refreshSessions();
+        if (!isMountedRef.current) return null;
+        if (forceNew) {
+          if (ids.includes(sid)) return sid;
+          return ids[ids.length - 1] ?? null;
+        }
+        if (ids.includes(sid)) return sid;
+        return ids[0] ?? null;
+      } catch (error) {
+        const term = termRef.current;
+        if (term) {
+          term.writeln("无法启动终端会话：" + String(error));
+        }
+        return null;
+      }
+    },
+    [projectPath, refreshSessions],
+  );
+
+  const handleSelectSession = useCallback(
+    async (sessionId: string) => {
+      setIsMenuOpen(false);
+      await attachToSession(sessionId);
+    },
+    [attachToSession],
+  );
+
+  const handleCreateSession = useCallback(async () => {
+    setIsMenuOpen(false);
+    const newId = await createSession(true);
+    if (newId) {
+      await attachToSession(newId);
+    }
+  }, [attachToSession, createSession]);
+
+  const handleCloseSession = useCallback(
+    async (sessionId: string) => {
+      setIsMenuOpen(false);
+      if (sessionIdRef.current === sessionId) {
+        await detachCurrentSession();
+      }
+      try {
+        await invoke("stop_terminal_session", { args: { sessionId } });
+      } catch (error) {
+        const term = termRef.current;
+        if (term) {
+          term.writeln("终止终端失败：" + String(error));
+        }
+      }
+      const ids = await refreshSessions();
+      if (!isMountedRef.current) return;
+      let nextId = ids.find((id) => id !== sessionId) ?? null;
+      if (!nextId) {
+        nextId = await createSession(false);
+      }
+      if (nextId) {
+        await attachToSession(nextId);
+      } else {
+        setActiveSessionId(null);
+      }
+    },
+    [attachToSession, createSession, detachCurrentSession, refreshSessions],
+  );
+
+  useEffect(() => {
+    if (!isMenuOpen) return;
+    const handlePointer = (event: MouseEvent | TouchEvent) => {
+      const container = menuContainerRef.current;
+      if (!container) return;
+      if (!container.contains(event.target as Node)) {
+        setIsMenuOpen(false);
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectPath]);
+    document.addEventListener("mousedown", handlePointer);
+    document.addEventListener("touchstart", handlePointer);
+    return () => {
+      document.removeEventListener("mousedown", handlePointer);
+      document.removeEventListener("touchstart", handlePointer);
+    };
+  }, [isMenuOpen]);
+
+  useEffect(() => {
+    if (!isMenuOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsMenuOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isMenuOpen]);
+
+  useEffect(() => {
+    setIsMenuOpen(false);
+    setActiveSessionId(null);
+    setSessionIds([]);
+    setSessionTitles({});
+    let disposed = false;
+
+    const boot = async () => {
+      await detachCurrentSession();
+      if (disposed || !isMountedRef.current) return;
+      const ids = await refreshSessions();
+      if (disposed || !isMountedRef.current) return;
+      let targetId: string | null = ids.length > 0 ? ids[0] : null;
+      if (!targetId) {
+        targetId = await createSession(false);
+      }
+      if (!targetId || disposed || !isMountedRef.current) return;
+      await attachToSession(targetId);
+    };
+
+    boot();
+
+    return () => {
+      disposed = true;
+      detachCurrentSession().catch(() => {});
+    };
+  }, [projectPath, attachToSession, createSession, detachCurrentSession, refreshSessions]);
+
+  const activeDisplayTitle = useMemo(() => {
+    if (!activeSessionId) return DEFAULT_TITLE;
+    const raw = sessionTitles[activeSessionId];
+    if (raw && raw.trim().length > 0) {
+      return raw.trim();
+    }
+    const index = sessionIds.findIndex((id) => id === activeSessionId);
+    if (index >= 0) {
+      if (sessionIds.length > 1) {
+        return `${DEFAULT_TITLE} ${index + 1}`;
+      }
+      return DEFAULT_TITLE;
+    }
+    return DEFAULT_TITLE;
+  }, [activeSessionId, sessionIds, sessionTitles]);
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 px-2 py-2 border-b">
-        <div className="text-sm font-medium">终端（项目环境）</div>
-        <div className="ml-auto text-xs text-muted-foreground">{running ? "已连接" : "未连接"}</div>
+    <div className="flex h-full w-full flex-col">
+      <div className="flex items-center border-b px-2 py-2">
+        <div ref={menuContainerRef} className="relative w-full">
+          <button
+            type="button"
+            onClick={() => setIsMenuOpen((prev) => !prev)}
+            className={cn(
+              "flex w-full items-center justify-between rounded-md border bg-card px-3 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
+              isMenuOpen ? "ring-1 ring-ring" : "hover:border-muted",
+            )}
+            aria-haspopup="menu"
+            aria-expanded={isMenuOpen}
+          >
+            <span className="truncate" title={activeDisplayTitle}>
+              {activeDisplayTitle}
+            </span>
+            <ChevronDown
+              className={cn("ml-2 h-4 w-4 transition-transform", isMenuOpen && "rotate-180")}
+              aria-hidden
+            />
+          </button>
+          {isMenuOpen && (
+            <div className="absolute left-0 top-full z-20 mt-2 w-64 rounded-md border bg-card shadow-lg">
+              <div className="max-h-64 overflow-y-auto py-1" role="menu">
+                {sessionIds.length === 0 ? (
+                  <div className="px-3 py-2 text-sm text-muted-foreground">暂无终端会话</div>
+                ) : (
+                  sessionIds.map((id, index) => {
+                    const display = getDisplayName(id, index);
+                    const isActive = id === activeSessionId;
+                    return (
+                      <div key={id} className="flex items-center">
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className={cn(
+                            "flex-1 truncate px-3 py-2 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
+                            isActive
+                              ? "bg-muted font-medium text-foreground"
+                              : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                          )}
+                          onClick={() => handleSelectSession(id)}
+                          title={display}
+                        >
+                          {display}
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="关闭终端"
+                          className={cn(
+                            "px-2 py-2 text-muted-foreground transition hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
+                            isActive && "text-destructive",
+                          )}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleCloseSession(id);
+                          }}
+                        >
+                          <X className="h-3.5 w-3.5" aria-hidden />
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+              <div className="border-t px-1 py-1">
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+                  onClick={handleCreateSession}
+                >
+                  <Plus className="h-4 w-4" aria-hidden />
+                  <span>新建终端</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-  <div ref={containerRef} className="flex-1 overflow-hidden bg-card" />
+      <div ref={containerRef} className="flex-1 overflow-hidden bg-card" />
     </div>
   );
 }

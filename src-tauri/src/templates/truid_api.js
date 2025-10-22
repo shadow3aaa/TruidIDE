@@ -2,7 +2,7 @@
   const promises = new Map();
   let seq = 0;
 
-  window.addEventListener('message', (event) => {
+  window.addEventListener("message", (event) => {
     if (event.source !== window.parent) return;
     const { id, ...data } = event.data;
     if (promises.has(id)) {
@@ -20,17 +20,17 @@
     return new Promise((resolve, reject) => {
       const id = seq++;
       promises.set(id, [resolve, reject]);
-      window.parent.postMessage({ id, cmd, args }, '*');
+      window.parent.postMessage({ id, cmd, args }, "*");
     });
   }
 
   const truidApi = {
-    toast: (text) => invoke('plugin:toast|toast', { text }),
+    toast: (text) => invoke("plugin:toast|toast", { text }),
   };
 
   async function showToast() {
     try {
-      await truidApi.toast('来自预览项目的问候！');
+      await truidApi.toast("来自预览项目的问候！");
     } catch (e) {
       console.error(e);
     }

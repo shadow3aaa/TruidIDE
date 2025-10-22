@@ -20,10 +20,12 @@ pub fn run() {
             projects::resolve_preview_entry,
             projects::create_project,
             terminal::start_terminal_session,
+            terminal::list_terminal_sessions,
             terminal::send_terminal_input,
             terminal::attach_terminal_session,
             terminal::detach_terminal_session,
             terminal::resize_terminal,
+            terminal::set_terminal_session_title,
             terminal::stop_terminal_session
         ])
         .run(tauri::generate_context!())
