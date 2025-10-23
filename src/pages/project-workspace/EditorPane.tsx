@@ -1,5 +1,7 @@
 import CodeMirror from "@uiw/react-codemirror";
+import Lottie from "lottie-react";
 import mapleFontTheme from "@/lib/codemirror-font";
+import waitingAnimation from "@/assets/cat.json";
 import { Button } from "@/components/ui/button";
 
 type Props = {
@@ -74,8 +76,14 @@ export function EditorPane({
               />
             </div>
           ) : (
-            <div className="absolute inset-0 flex items-center justify-center px-6 text-sm text-muted-foreground">
-              选择一个文件以在此处查看或编辑内容。
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-sm text-muted-foreground text-center">
+              <Lottie
+                animationData={waitingAnimation}
+                className="h-40 w-40 max-w-full"
+                autoplay
+                loop
+              />
+              <p>选择一个文件以在此处查看或编辑内容。</p>
             </div>
           )}
         </div>
