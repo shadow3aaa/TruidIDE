@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import { css } from "@codemirror/lang-css";
 import { html } from "@codemirror/lang-html";
 import { javascript } from "@codemirror/lang-javascript";
@@ -75,10 +75,189 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
   const [fileContentVersion, setFileContentVersion] = useState(0);
   const saveTimerRef = useRef<number | null>(null);
 
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
+  type PreviewStatus = "idle" | "validating" | "ready" | "offline";
+
+  const [previewAddressInput, setPreviewAddressInput] = useState("5173");
+  const [previewAddressError, setPreviewAddressError] = useState<string | null>(
+    null,
+  );
+  const [previewResolvedBaseUrl, setPreviewResolvedBaseUrl] = useState<
+    string | null
+  >(null);
   const [previewReloadToken, setPreviewReloadToken] = useState(0);
+  const [previewStatus, setPreviewStatus] = useState<PreviewStatus>("idle");
+  const previewStorageKey = useMemo(
+    () => `truidide:preview-target:${projectPath}`,
+    [projectPath],
+  );
+
+  const previewResolvedUrl = useMemo(() => {
+    if (!previewResolvedBaseUrl) {
+      return null;
+    }
+    if (previewReloadToken <= 0) {
+      return previewResolvedBaseUrl;
+    }
+    const separator = previewResolvedBaseUrl.includes("?") ? "&" : "?";
+    return `${previewResolvedBaseUrl}${separator}__truidide=${previewReloadToken}`;
+  }, [previewResolvedBaseUrl, previewReloadToken]);
+
+  const resolvePreviewTarget = useCallback((raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      throw new Error("请输入要预览的端口号或完整地址");
+    }
+
+    const portMatch = trimmed.match(/^\d{1,5}$/);
+    if (portMatch) {
+      const portNumber = Number(trimmed);
+      if (portNumber < 1 || portNumber > 65535) {
+        throw new Error("端口号需在 1 到 65535 之间");
+      }
+      return `http://127.0.0.1:${portNumber}`;
+    }
+
+    const hostPortMatch = trimmed.match(
+      /^(localhost|127\.0\.0\.1)(?::(\d{1,5}))$/i,
+    );
+    if (hostPortMatch) {
+      const portNumber = Number(hostPortMatch[2]);
+      if (portNumber < 1 || portNumber > 65535) {
+        throw new Error("端口号需在 1 到 65535 之间");
+      }
+      return `http://${hostPortMatch[1]}:${portNumber}`;
+    }
+
+    if (/^https?:\/\//i.test(trimmed)) {
+      try {
+        const url = new URL(trimmed);
+        if (url.protocol !== "http:" && url.protocol !== "https:") {
+          throw new Error();
+        }
+        return url.toString();
+      } catch {
+        throw new Error("请输入有效的 http(s) 地址");
+      }
+    }
+
+    throw new Error("请输入端口号或以 http:// 开头的地址");
+  }, []);
+
+  const handlePreviewAddressInputChange = useCallback(
+    (value: string) => {
+      setPreviewAddressInput(value);
+      if (previewAddressError) {
+        setPreviewAddressError(null);
+      }
+    },
+    [previewAddressError],
+  );
+
+  const validatePreviewAddress = useCallback(
+    async (resolved: string, persistValue?: string | null) => {
+    if (typeof window === "undefined") {
+      setPreviewResolvedBaseUrl(resolved);
+      setPreviewReloadToken((token) => token + 1);
+      return true;
+    }
+
+      setPreviewStatus("validating");
+      setPreviewResolvedBaseUrl(resolved);
+
+      if (persistValue) {
+        try {
+          window.localStorage.setItem(previewStorageKey, persistValue);
+        } catch {
+          // ignore storage access errors
+        }
+      }
+
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 5000);
+
+      try {
+        await fetch(resolved, {
+          method: "GET",
+          cache: "no-store",
+          mode: "no-cors",
+          signal: controller.signal,
+        });
+        window.clearTimeout(timeoutId);
+        setPreviewReloadToken((token) => token + 1);
+        return true;
+      } catch {
+        window.clearTimeout(timeoutId);
+        setPreviewStatus("offline");
+        return false;
+      }
+    },
+    [previewStorageKey],
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const stored = window.localStorage.getItem(previewStorageKey);
+      if (stored) {
+        setPreviewAddressInput(stored);
+        try {
+          const resolved = resolvePreviewTarget(stored);
+          void validatePreviewAddress(resolved, undefined);
+        } catch {
+          setPreviewStatus("idle");
+        }
+      } else {
+        setPreviewStatus("idle");
+      }
+    } catch {
+      setPreviewStatus("idle");
+    }
+  }, [previewStorageKey, resolvePreviewTarget, validatePreviewAddress]);
+
+  const handleApplyPreviewAddress = useCallback(() => {
+    setPreviewAddressError(null);
+
+    try {
+      const trimmed = previewAddressInput.trim();
+      const resolved = resolvePreviewTarget(previewAddressInput);
+      void validatePreviewAddress(resolved, trimmed || null);
+    } catch (error) {
+      const message =
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+            ? error.message
+            : "请输入有效的端口或地址";
+      setPreviewAddressError(message);
+    }
+  }, [previewAddressInput, resolvePreviewTarget, validatePreviewAddress]);
+
+  const requestPreviewReload = useCallback(() => {
+    if (previewResolvedBaseUrl) {
+      setPreviewAddressError(null);
+      void validatePreviewAddress(previewResolvedBaseUrl, undefined);
+      return;
+    }
+
+    handleApplyPreviewAddress();
+  }, [
+    previewResolvedBaseUrl,
+    validatePreviewAddress,
+    handleApplyPreviewAddress,
+  ]);
+
+  const handlePreviewFrameLoaded = useCallback(() => {
+    setPreviewStatus((status) =>
+      status === "validating" ? "ready" : status,
+    );
+  }, []);
+
+  const handlePreviewFrameError = useCallback(() => {
+    setPreviewStatus("offline");
+  }, []);
 
   const [isCreateEntryDialogOpen, setCreateEntryDialogOpen] = useState(false);
   const [createEntryType, setCreateEntryType] =
@@ -315,11 +494,6 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
       setRenameEntryName(entryActionContext.node.name);
     }
   }, [entryActionContext]);
-
-  const requestPreviewReload = useCallback(() => {
-    setPreviewReloadToken((token) => token + 1);
-  }, []);
-
   const suppressLoadingRef = React.useRef(false);
   const fetchIdRef = React.useRef<number | null>(null);
   const isFetchingRef = React.useRef(false);
@@ -375,10 +549,11 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
     }
     setExplorerOpen(true);
     setActiveBottomTab("files");
-    setPreviewUrl(null);
-    setPreviewError(null);
-    setIsLoadingPreview(false);
+    setPreviewAddressInput("5173");
+    setPreviewResolvedBaseUrl(null);
     setPreviewReloadToken(0);
+    setPreviewAddressError(null);
+    setPreviewStatus("idle");
     setColumnViews({
       left: createColumnState(projectPath),
       right: createColumnState(projectPath),
@@ -1052,50 +1227,6 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
   }, [activeColumn, projectPath]);
   // removed local isFilesTab; BottomExplorer uses activeBottomTab
 
-  useEffect(() => {
-    if (activeBottomTab !== "preview") {
-      return;
-    }
-
-    let cancelled = false;
-    setIsLoadingPreview(true);
-    setPreviewError(null);
-    setPreviewUrl(null);
-
-    invoke<string>("resolve_preview_entry", { projectPath })
-      .then((entryPath) => {
-        if (cancelled) {
-          return;
-        }
-        const baseUrl = convertFileSrc(entryPath);
-        const separator = baseUrl.includes("?") ? "&" : "?";
-        const timestamp = Date.now();
-        const cacheBustedUrl = `${baseUrl}${separator}v=${timestamp}-${previewReloadToken}`;
-        setPreviewUrl(cacheBustedUrl);
-      })
-      .catch((error: unknown) => {
-        if (cancelled) {
-          return;
-        }
-        const message =
-          typeof error === "string"
-            ? error
-            : error instanceof Error
-              ? error.message
-              : "生成预览失败";
-        setPreviewError(message);
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setIsLoadingPreview(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeBottomTab, previewReloadToken, projectPath]);
-
   const handleEditorChange = (value: string) => {
     if (value === fileContent) {
       return;
@@ -1116,15 +1247,9 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
       invoke("save_project_file", {
         filePath: targetPath,
         contents: value,
+      }).catch((error: unknown) => {
+        console.error("保存文件失败", error);
       })
-        .then(() => {
-          if (activeBottomTab === "preview") {
-            requestPreviewReload();
-          }
-        })
-        .catch((error: unknown) => {
-          console.error("保存文件失败", error);
-        })
         .finally(() => {
           if (saveTimerRef.current === timerId) {
             saveTimerRef.current = null;
@@ -1243,11 +1368,20 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
           setActiveBottomTab={setActiveBottomTab}
           activeBottomTab={activeBottomTab}
           isLoadingFileTree={isLoadingFileTree}
-          isLoadingPreview={isLoadingPreview}
           toggleExplorer={toggleExplorer}
+          previewAddressInput={previewAddressInput}
+          onPreviewAddressInputChange={handlePreviewAddressInputChange}
+          onApplyPreviewAddress={handleApplyPreviewAddress}
+          previewAddressError={previewAddressError}
+          previewResolvedBaseUrl={previewResolvedBaseUrl}
+          previewResolvedUrl={previewResolvedUrl}
+          canReloadPreview={
+            Boolean(previewResolvedBaseUrl) && previewStatus !== "validating"
+          }
+          previewStatus={previewStatus}
           requestPreviewReload={requestPreviewReload}
-          previewUrl={previewUrl}
-          previewError={previewError}
+          onPreviewFrameLoaded={handlePreviewFrameLoaded}
+          onPreviewFrameError={handlePreviewFrameError}
           columnOrder={columnOrder}
           columnComputed={columnComputed}
           activeColumn={activeColumn}

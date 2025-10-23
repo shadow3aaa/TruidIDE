@@ -27,3 +27,10 @@ once_cell = "1.21.3"
 portable-pty = { version = "0.9.0" }
 tar = "0.4.44"
 xz2 = "0.1.7"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

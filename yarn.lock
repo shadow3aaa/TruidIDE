@@ -394,21 +394,21 @@ __metadata:
   linkType: hard
 
 "@emnapi/core@npm:^1.5.0":
-  version: 1.5.0
-  resolution: "@emnapi/core@npm:1.5.0"
+  version: 1.6.0
+  resolution: "@emnapi/core@npm:1.6.0"
   dependencies:
     "@emnapi/wasi-threads": "npm:1.1.0"
     tslib: "npm:^2.4.0"
-  checksum: 10c0/52ba3485277706d92fa27d92b37e5b4f6ef0742c03ed68f8096f294c6bfa30f0752c82d4c2bfa14bff4dc30d63c9f71a8f9fb64a92743d00807d9e468fafd5ff
+  checksum: 10c0/40e384f39104a9f8260e671c0110f8618961afc564afb2e626af79175717a8b5e2d8b2ae3d30194d318a71247e0fc833601666233adfeb244c46cadc06c58a51
   languageName: node
   linkType: hard
 
 "@emnapi/runtime@npm:^1.5.0":
-  version: 1.5.0
-  resolution: "@emnapi/runtime@npm:1.5.0"
+  version: 1.6.0
+  resolution: "@emnapi/runtime@npm:1.6.0"
   dependencies:
     tslib: "npm:^2.4.0"
-  checksum: 10c0/a85c9fc4e3af49cbe41e5437e5be2551392a931910cd0a5b5d3572532786927810c9cc1db11b232ec8f9657b33d4e6f7c4f985f1a052917d7cd703b5b2a20faa
+  checksum: 10c0/e3d2452a8fb83bb59fe60dfcf4cff99f9680c13c07dff8ad28639ccc8790151841ef626a67014bde132939bad73dfacc440ade8c3db2ab12693ea9c8ba4d37fb
   languageName: node
   linkType: hard
 
@@ -740,12 +740,12 @@ __metadata:
   linkType: hard
 
 "@lezer/markdown@npm:^1.0.0":
-  version: 1.5.0
-  resolution: "@lezer/markdown@npm:1.5.0"
+  version: 1.5.1
+  resolution: "@lezer/markdown@npm:1.5.1"
   dependencies:
     "@lezer/common": "npm:^1.0.0"
     "@lezer/highlight": "npm:^1.0.0"
-  checksum: 10c0/0f9e478400c6e409f23ffc4f0ca8d880683233691feee5ab883d67632fe94c69e1847700eb2d2fc03f8b63e1595bd61c0cf94a6a52e7a24caf06de5fbc6408e3
+  checksum: 10c0/a0c8c421f9e007f61886c15935036dfe1e0935b90c0aabfd5e1dfd0dcbaf37bc7263c56a0e31b38dbb9f372ead64bdadc342c7ed31730ccc0c26dc0c3818ecd2
   languageName: node
   linkType: hard
 
@@ -2417,6 +2417,25 @@ __metadata:
   languageName: node
   linkType: hard
 
+"lottie-react@npm:^2.4.1":
+  version: 2.4.1
+  resolution: "lottie-react@npm:2.4.1"
+  dependencies:
+    lottie-web: "npm:^5.10.2"
+  peerDependencies:
+    react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+    react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+  checksum: 10c0/7f6a0a2cf2af25deabe7b4d4c9917e47d12016673613c59dcdd8ef52e10e914dd0c1f71d4a275d56aaba03fe9d85b333087f7c8d40a8f967ece4a0444c7a3cdf
+  languageName: node
+  linkType: hard
+
+"lottie-web@npm:^5.10.2":
+  version: 5.13.0
+  resolution: "lottie-web@npm:5.13.0"
+  checksum: 10c0/b463ad462169df3f7e04b7f3716274e269842554f1d72b8303ca7245628f2512982a59ae31698b3d57fbcda886228ae160fcb2aa518c6cecd8a95974db2458ee
+  languageName: node
+  linkType: hard
+
 "lru-cache@npm:^10.0.1, lru-cache@npm:^10.2.0":
   version: 10.4.3
   resolution: "lru-cache@npm:10.4.3"
@@ -3112,6 +3131,7 @@ __metadata:
     "@vitejs/plugin-react": "npm:^4.6.0"
     class-variance-authority: "npm:^0.7.1"
     clsx: "npm:^2.1.1"
+    lottie-react: "npm:^2.4.1"
     lucide-react: "npm:^0.546.0"
     prettier: "npm:3.6.2"
     react: "npm:^19.1.0"
