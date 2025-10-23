@@ -101,7 +101,7 @@ export function ExplorerColumns({
               )}
               onMouseDown={() => onColumnFocus(columnId)}
             >
-              <div className="no-scrollbar flex-1 overflow-y-auto">
+              <div className="no-scrollbar flex-1 overflow-y-auto overflow-x-hidden">
                 <div className="divide-y divide-border">
                   {/* parent (go up) button */}
                   <div className={cn("relative group -mx-6 px-6", columnCanGoUp ? "" : "opacity-60") }>
