@@ -121,10 +121,37 @@ export default function TerminalTab({ projectPath }: Props) {
       }
       const activeSid = sessionIdRef.current;
       if (!activeSid) return;
+      let payload = data;
+      const ctrlLocked = ctrlLockedRef.current;
+      const altLocked = altLockedRef.current;
+
+      if ((ctrlLocked || altLocked) && data.length === 1) {
+        let modified = data;
+        if (ctrlLocked) {
+          const upper = data.toUpperCase();
+          if (upper >= "A" && upper <= "Z") {
+            modified = String.fromCharCode(upper.charCodeAt(0) - 64);
+          } else if (data === " ") {
+            modified = "\u0000";
+          }
+        }
+        if (altLocked) {
+          modified = `\u001b${modified}`;
+        }
+        payload = modified;
+        if (ctrlLocked) {
+          ctrlLockedRef.current = false;
+          setIsCtrlLocked(false);
+        }
+        if (altLocked) {
+          altLockedRef.current = false;
+          setIsAltLocked(false);
+        }
+      }
       invoke("send_terminal_input", {
         args: {
           sessionId: activeSid,
-          input: data,
+          input: payload,
         },
       }).catch(() => {});
     });
