@@ -161,8 +161,8 @@ export function ProotDownloadProgress() {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-96 pb-safe">
-      <Card className="p-4 shadow-lg">
+    <div className="fixed inset-x-4 bottom-4 z-50 flex justify-center pb-safe">
+      <Card className="w-full max-w-sm p-4 shadow-lg">
         <div className="space-y-3">
           {/* 标题 */}
           <div className="flex items-center justify-between">
@@ -179,7 +179,7 @@ export function ProotDownloadProgress() {
           {!progress && !isReady && (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                首次使用需要下载 Linux 运行环境（约 200-300 MB）
+                首次使用需要下载 Linux 运行环境
               </p>
               <Button
                 className="w-full"
