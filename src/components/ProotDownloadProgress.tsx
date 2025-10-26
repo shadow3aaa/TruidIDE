@@ -32,11 +32,21 @@ export function useDownloadStatus() {
 export function DownloadStatusProvider({ children }: { children: ReactNode }) {
   const [isDownloading, setIsDownloading] = useState(false);
   const [isReady, setIsReady] = useState(true);
+  const [isAndroid, setIsAndroid] = useState(false);
 
   useEffect(() => {
-    // 检查初始状态
-    checkProotStatus().then((ready) => {
-      setIsReady(ready);
+    // 检测平台
+    import("@tauri-apps/plugin-os").then(async ({ platform }) => {
+      const p = await platform();
+      const android = p === "android";
+      setIsAndroid(android);
+
+      // 只在 Android 上检查状态
+      if (android) {
+        checkProotStatus().then((ready) => {
+          setIsReady(ready);
+        });
+      }
     });
 
     let unlisten: (() => void) | undefined;
@@ -67,8 +77,14 @@ export function DownloadStatusProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // 非 Android 平台始终返回 ready
+  const contextValue = {
+    isDownloading: isAndroid ? isDownloading : false,
+    isReady: isAndroid ? isReady : true,
+  };
+
   return (
-    <DownloadStatusContext.Provider value={{ isDownloading, isReady }}>
+    <DownloadStatusContext.Provider value={contextValue}>
       {children}
     </DownloadStatusContext.Provider>
   );
@@ -79,14 +95,26 @@ export function ProotDownloadProgress() {
   const [isVisible, setIsVisible] = useState(false);
   const [isReady, setIsReady] = useState(true);
   const [isStarting, setIsStarting] = useState(false);
+  const [isAndroid, setIsAndroid] = useState(false);
 
   useEffect(() => {
-    // 检查初始状态
-    checkProotStatus().then((ready) => {
-      setIsReady(ready);
-      if (!ready) {
-        setIsVisible(true); // 如果未准备好，显示下载提示
+    // 检测平台，只在 Android 上显示
+    import("@tauri-apps/plugin-os").then(async ({ platform }) => {
+      const p = await platform();
+      const android = p === "android";
+      setIsAndroid(android);
+
+      if (!android) {
+        return; // 非 Android 平台直接返回
       }
+
+      // 检查初始状态
+      checkProotStatus().then((ready) => {
+        setIsReady(ready);
+        if (!ready) {
+          setIsVisible(true); // 如果未准备好，显示下载提示
+        }
+      });
     });
 
     let unlisten: (() => void) | undefined;
@@ -127,6 +155,11 @@ export function ProotDownloadProgress() {
   };
 
   if (!isVisible) {
+    return null;
+  }
+
+  // 非 Android 平台不显示
+  if (!isAndroid) {
     return null;
   }
 

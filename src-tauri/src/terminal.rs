@@ -2,25 +2,12 @@ use once_cell::sync::OnceCell;
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
-#[cfg(target_os = "android")]
-use std::fs::{self, File};
 use std::io::prelude::*;
-#[cfg(target_os = "android")]
-use std::io::{self, BufReader};
-#[cfg(target_os = "android")]
-use std::path::Path;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::thread;
-#[cfg(target_os = "android")]
-use tauri::path::BaseDirectory;
 use tauri::{Emitter, Manager};
-#[cfg(target_os = "android")]
-use xz2::bufread::XzDecoder;
-
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
 
 static SESSIONS: OnceCell<
     Mutex<
@@ -139,91 +126,15 @@ fn sessions_by_cwd_map() -> &'static Mutex<HashMap<String, Vec<String>>> {
 }
 
 #[cfg(target_os = "android")]
-fn decompress_tar_xz(src: &Path, dest: &Path) -> io::Result<()> {
-    let file = File::open(src)?;
-    let buf_reader = BufReader::new(file);
-    let xz_decoder = XzDecoder::new(buf_reader);
-    let mut archive = tar::Archive::new(xz_decoder);
-    archive.unpack(dest)?;
-
-    Ok(())
-}
-
-#[cfg(target_os = "android")]
-fn prepare_proot_env(app: tauri::AppHandle) -> Result<String, String> {
-    // Locate files/proot in app data
-    let appdata_base = app
-        .path()
-        .resolve("files/proot", BaseDirectory::AppData)
-        .map_err(|e| e.to_string())?;
-
-    if !appdata_base.exists() {
-        return Err(format!("应用私有目录中未找到 proot 目录：{}，请确保应用已在启动时解压 assets/proot 到 files/proot", appdata_base.to_string_lossy()));
-    }
-
-    let dest = appdata_base;
-
-    let rootfs_dir = dest.join("rootfs");
-    if !rootfs_dir.exists() {
-        // If a compressed rootfs archive exists, try to extract it
-        let compressed = dest.join("rootfs.tar.xz");
-        if !compressed.exists() {
-            return Err(format!("rootfs 未解压到 {}，请确保已将 rootfs 解压到该目录或将 rootfs.tar.xz 放在此目录以启用自动解压", rootfs_dir.to_string_lossy()));
-        }
-
-        if !rootfs_dir.exists() {
-            decompress_tar_xz(&compressed, &rootfs_dir)
-                .map_err(|e| format!("解压 rootfs 失败: {e:?}"))?;
-        }
-
-        // set executable perms for proot binaries on unix
-        let proot_path = dest.join("proot/bin/proot");
-        let loader_path = dest.join("proot/libexec/proot/loader");
-        let loader32_path = dest.join("proot/libexec/proot/loader32");
-        let files_to_make_executable = [&proot_path, &loader_path, &loader32_path];
-        #[cfg(unix)]
-        {
-            for file_path in &files_to_make_executable {
-                if !file_path.exists() {
-                    return Err(format!(
-                        "必需的文件未找到: {}，请确保 assets 中包含 proot 及其所有组件",
-                        file_path.to_string_lossy()
-                    ));
-                }
-
-                let mut perms = fs::metadata(file_path)
-                    .map_err(|e| format!("无法获取元数据 ({}): {e}", file_path.to_string_lossy()))?
-                    .permissions();
-
-                let current_mode = perms.mode();
-                let new_mode = current_mode | 0o111;
-
-                if current_mode != new_mode {
-                    perms.set_mode(new_mode);
-                    fs::set_permissions(file_path, perms).map_err(|e| {
-                        format!("无法设置可执行权限 ({}): {e}", file_path.to_string_lossy())
-                    })?;
-                }
-            }
-        }
-
-        if !rootfs_dir.exists() {
-            return Err(format!(
-                "解压完成后仍未找到 rootfs 目录: {}",
-                rootfs_dir.to_string_lossy()
-            ));
-        }
-    }
-
-    Ok(dest.to_string_lossy().into_owned())
-}
-
-#[cfg(target_os = "android")]
 fn start_proot_session_internal(
     app: tauri::AppHandle,
     cwd_in_rootfs: Option<String>,
 ) -> Result<String, String> {
-    let prepared = prepare_proot_env(app.clone())?;
+    use crate::android::proot::prepare_proot_env;
+
+    // 使用 android.rs 中的统一 prepare_proot_env 函数
+    let env = prepare_proot_env(&app)?;
+    let prepared = env.base_dir.to_string_lossy().into_owned();
 
     let prepared_path = PathBuf::from(prepared);
     let proot = prepared_path.join("proot/bin/proot");

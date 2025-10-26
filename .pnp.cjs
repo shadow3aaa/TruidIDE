@@ -49,6 +49,7 @@ const RAW_RUNTIME_STATE =
           ["@tauri-apps/cli", "npm:2.8.4"],\
           ["@tauri-apps/plugin-dialog", "npm:2.4.0"],\
           ["@tauri-apps/plugin-opener", "npm:2.5.0"],\
+          ["@tauri-apps/plugin-os", "npm:2.3.1"],\
           ["@types/node", "npm:24.8.1"],\
           ["@types/react", "npm:19.2.2"],\
           ["@types/react-dom", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:19.2.2"],\
@@ -2171,6 +2172,16 @@ const RAW_RUNTIME_STATE =
         "packageDependencies": [\
           ["@tauri-apps/api", "npm:2.8.0"],\
           ["@tauri-apps/plugin-opener", "npm:2.5.0"]\
+        ],\
+        "linkType": "HARD"\
+      }]\
+    ]],\
+    ["@tauri-apps/plugin-os", [\
+      ["npm:2.3.1", {\
+        "packageLocation": "../AppData/Local/Yarn/Berry/cache/@tauri-apps-plugin-os-npm-2.3.1-451030b897-10c0.zip/node_modules/@tauri-apps/plugin-os/",\
+        "packageDependencies": [\
+          ["@tauri-apps/api", "npm:2.8.0"],\
+          ["@tauri-apps/plugin-os", "npm:2.3.1"]\
         ],\
         "linkType": "HARD"\
       }]\
@@ -5666,6 +5677,7 @@ const RAW_RUNTIME_STATE =
           ["@tauri-apps/cli", "npm:2.8.4"],\
           ["@tauri-apps/plugin-dialog", "npm:2.4.0"],\
           ["@tauri-apps/plugin-opener", "npm:2.5.0"],\
+          ["@tauri-apps/plugin-os", "npm:2.3.1"],\
           ["@types/node", "npm:24.8.1"],\
           ["@types/react", "npm:19.2.2"],\
           ["@types/react-dom", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:19.2.2"],\

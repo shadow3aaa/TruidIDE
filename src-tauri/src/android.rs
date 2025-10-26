@@ -462,65 +462,6 @@ pub mod proot {
         .map_err(|e| format!("后台任务执行失败: {e}"))?
     }
 
-    /// 检查并初始化 proot 环境（已废弃，保留以兼容旧代码）
-    #[deprecated(note = "使用 check_proot_status 和 download_and_prepare_proot 代替")]
-    pub async fn check_and_prepare_proot(app: AppHandle) -> Result<(), String> {
-        // 在后台线程执行，避免阻塞主线程
-        tauri::async_runtime::spawn_blocking(move || {
-            // 只检查和下载资源，不完全初始化环境
-            let appdata_base = app
-                .path()
-                .resolve("files/proot", BaseDirectory::AppData)
-                .map_err(|e| e.to_string())?;
-
-            // 如果目录不存在或为空，从 GitHub 下载
-            if !appdata_base.exists()
-                || fs::read_dir(&appdata_base)
-                    .map(|mut d| d.next().is_none())
-                    .unwrap_or(true)
-            {
-                fs::create_dir_all(&appdata_base)
-                    .map_err(|e| format!("创建 proot 目录失败: {e}"))?;
-
-                eprintln!("首次运行，正在从 GitHub 下载 proot 和 rootfs...");
-
-                // 下载资源
-                if let Err(e) = download_and_extract_assets(&app, &appdata_base) {
-                    // 发送错误事件
-                    let _ = app.emit(
-                        "proot-download-progress",
-                        DownloadProgress::Error { message: e.clone() },
-                    );
-                    return Err(e);
-                }
-
-                // 检查是否需要解压 rootfs
-                let rootfs_root = appdata_base.join("rootfs");
-                if !rootfs_root.exists() {
-                    let compressed = appdata_base.join("rootfs.tar.xz");
-                    if compressed.exists() {
-                        eprintln!("正在解压 rootfs (首次运行可能需要几分钟)...");
-
-                        decompress_tar_xz(&app, &compressed, &rootfs_root)
-                            .map_err(|e| format!("解压 rootfs 失败: {e:?}"))?;
-
-                        // 解压成功后可以删除压缩包以节省空间
-                        let _ = fs::remove_file(&compressed);
-                    }
-                }
-
-                // 发送完成事件
-                let _ = app.emit("proot-download-progress", DownloadProgress::Completed);
-            }
-
-            Ok(())
-        })
-        .await
-        .map_err(|e| format!("后台任务执行失败: {e}"))??;
-
-        Ok(())
-    }
-
     pub fn prepare_proot_env(app: &AppHandle) -> Result<ProotEnv, String> {
         let appdata_base = app
             .path()
