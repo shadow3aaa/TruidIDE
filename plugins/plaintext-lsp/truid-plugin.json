@@ -1,0 +1,20 @@
+{
+  "id": "truidide.plaintext-lsp",
+  "name": "Plaintext LSP",
+  "version": "0.1.0",
+  "description": "A simple test LSP for plaintext files with basic features",
+  "author": "TruidIDE",
+  "enabled": true,
+  "tags": ["lsp", "plaintext", "test"],
+  "kind": {
+    "type": "lsp",
+    "languageIds": ["plaintext", "txt"],
+    "command": "node",
+    "args": ["server.js"],
+    "env": {},
+    "initializationOptions": {
+      "maxWordLength": 50,
+      "enableDiagnostics": true
+    }
+  }
+}

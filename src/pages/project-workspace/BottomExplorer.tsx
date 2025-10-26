@@ -15,13 +15,15 @@ import {
 } from "lucide-react";
 import { ExplorerColumns } from "./ExplorerColumns";
 import { Card, CardHeader } from "@/components/ui/card";
-import type { ColumnId, ColumnState } from "./types";
+import type { ColumnId, ColumnState, BottomTabId } from "./types";
+import type { PluginLogEntry } from "./PluginOutputPanel";
+import { PluginOutputPanel } from "./PluginOutputPanel";
 import waitingAnimation from "@/assets/cat.json";
 
 type Props = {
   isExplorerOpen: boolean;
-  setActiveBottomTab: (id: any) => void;
-  activeBottomTab: "files" | "preview" | "terminal";
+  setActiveBottomTab: (id: BottomTabId) => void;
+  activeBottomTab: BottomTabId;
   isLoadingFileTree: boolean;
   toggleExplorer: () => void;
   previewAddressInput: string;
@@ -60,6 +62,8 @@ type Props = {
   fileTreeError: string | null;
   insertTextAtCursor?: (text: string) => void;
   projectPath: string;
+  pluginLogs: PluginLogEntry[];
+  onClearPluginLogs: () => void;
 };
 
 export function BottomExplorer(props: Props) {
@@ -100,11 +104,14 @@ export function BottomExplorer(props: Props) {
     handleSwapColumns,
     fileTree,
     fileTreeError,
+    pluginLogs,
+    onClearPluginLogs,
   } = props;
 
   const isFilesTab = activeBottomTab === "files";
   const isPreviewTab = activeBottomTab === "preview";
   const isTerminalTab = activeBottomTab === "terminal";
+  const isLogsTab = activeBottomTab === "logs";
   const TerminalTabLazy = React.lazy(() => import("@/components/TerminalTab"));
   const [isHelpOpen, setIsHelpOpen] = React.useState(false);
 
@@ -188,6 +195,21 @@ export function BottomExplorer(props: Props) {
                   >
                     终端
                   </button>
+                  <button
+                    type="button"
+                    onPointerDown={(e) => e.preventDefault()}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => setActiveBottomTab("logs")}
+                    className={cn(
+                      "rounded-full px-3 py-1 text-sm font-medium transition",
+                      isLogsTab
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                    aria-pressed={isLogsTab}
+                  >
+                    输出
+                  </button>
                 </div>
 
                 {/* right: collapse button */}
@@ -201,7 +223,9 @@ export function BottomExplorer(props: Props) {
                       "inline-flex items-center justify-center rounded-full p-1",
                       "text-muted-foreground hover:bg-muted/10",
                     )}
-                    aria-label={isExplorerOpen ? "收起底部面板" : "展开底部面板"}
+                    aria-label={
+                      isExplorerOpen ? "收起底部面板" : "展开底部面板"
+                    }
                   >
                     <ChevronDown className="h-4 w-4" />
                   </button>
@@ -261,7 +285,7 @@ export function BottomExplorer(props: Props) {
           </div>
         ) : null}
       </div>
-  <div className="relative flex-1 overflow-hidden px-4 pb-5 pt-2">
+      <div className="relative flex-1 overflow-hidden px-4 pb-5 pt-2">
         {isExplorerOpen && (
           <>
             {isFilesTab ? (
@@ -271,7 +295,9 @@ export function BottomExplorer(props: Props) {
                     <Card className="h-full">
                       <CardHeader className="px-4 pt-3 pb-0">
                         <div className="inline-flex max-w-[36rem] items-center gap-2 truncate px-3 py-1 rounded-md bg-black text-white text-sm font-medium shadow-sm">
-                          <span className="truncate">{activeDirectoryDisplayPath}</span>
+                          <span className="truncate">
+                            {activeDirectoryDisplayPath}
+                          </span>
                         </div>
                       </CardHeader>
                       <div className="flex h-full items-center justify-center px-6 text-sm text-muted-foreground">
@@ -282,18 +308,24 @@ export function BottomExplorer(props: Props) {
                     <Card className="h-full">
                       <CardHeader className="px-4 pt-3 pb-0">
                         <div className="inline-flex max-w-[36rem] items-center gap-2 truncate px-3 py-1 rounded-md bg-black text-white text-sm font-medium shadow-sm">
-                          <span className="truncate">{activeDirectoryDisplayPath}</span>
+                          <span className="truncate">
+                            {activeDirectoryDisplayPath}
+                          </span>
                         </div>
                       </CardHeader>
                       <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-                        <p className="text-sm text-destructive">{fileTreeError}</p>
+                        <p className="text-sm text-destructive">
+                          {fileTreeError}
+                        </p>
                       </div>
                     </Card>
                   ) : fileTree.length === 0 ? (
                     <Card className="h-full">
                       <CardHeader className="px-4 pt-3 pb-0">
                         <div className="inline-flex max-w-[36rem] items-center gap-2 truncate px-3 py-1 rounded-md bg-black text-white text-sm font-medium shadow-sm">
-                          <span className="truncate">{activeDirectoryDisplayPath}</span>
+                          <span className="truncate">
+                            {activeDirectoryDisplayPath}
+                          </span>
                         </div>
                       </CardHeader>
                       <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-sm text-muted-foreground">
@@ -381,7 +413,10 @@ export function BottomExplorer(props: Props) {
                       }}
                     >
                       <div className="flex flex-wrap items-center gap-2">
-                        <label className="sr-only" htmlFor="preview-address-input">
+                        <label
+                          className="sr-only"
+                          htmlFor="preview-address-input"
+                        >
                           预览端口或完整地址
                         </label>
                         <div className="flex min-w-0 flex-1 gap-2">
@@ -393,7 +428,9 @@ export function BottomExplorer(props: Props) {
                             }
                             placeholder="例如 5173 或 http://localhost:5173"
                             autoComplete="off"
-                            aria-invalid={previewAddressError ? true : undefined}
+                            aria-invalid={
+                              previewAddressError ? true : undefined
+                            }
                           />
                           <Button
                             type="submit"
@@ -433,9 +470,15 @@ export function BottomExplorer(props: Props) {
                           </Button>
                           {isHelpOpen ? (
                             <div className="absolute right-0 z-20 mt-2 w-64 rounded-md border bg-popover px-4 py-3 text-xs text-muted-foreground shadow-lg">
-                              <p className="font-medium text-foreground">如何使用预览</p>
+                              <p className="font-medium text-foreground">
+                                如何使用预览
+                              </p>
                               <ul className="mt-2 list-disc space-y-1 pl-4">
-                                <li>先在“终端”标签中运行开发服务器（如 <span className="font-mono">npm run dev</span>）。</li>
+                                <li>
+                                  先在“终端”标签中运行开发服务器（如{" "}
+                                  <span className="font-mono">npm run dev</span>
+                                  ）。
+                                </li>
                                 <li>输入端口号或完整地址，点击“加载”应用。</li>
                                 <li>右侧刷新按钮可强制重新加载预览。</li>
                               </ul>
@@ -504,11 +547,20 @@ export function BottomExplorer(props: Props) {
                   </div>
                 </div>
               </div>
-            ) : (
+            ) : isTerminalTab ? (
               <div className="h-full overflow-hidden rounded-xl border bg-card shadow-sm">
-                <React.Suspense fallback={<div className="p-4">正在加载终端…</div>}>
+                <React.Suspense
+                  fallback={<div className="p-4">正在加载终端…</div>}
+                >
                   <TerminalTabLazy projectPath={props.projectPath} />
                 </React.Suspense>
+              </div>
+            ) : (
+              <div className="h-full overflow-hidden rounded-xl border bg-card shadow-sm">
+                <PluginOutputPanel
+                  logs={pluginLogs}
+                  onClear={onClearPluginLogs}
+                />
               </div>
             )}
           </>

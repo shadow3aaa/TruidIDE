@@ -13,9 +13,17 @@ import { Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import HomePage from "@/pages/HomePage";
 import ProjectWorkspace from "@/pages/ProjectWorkspace";
+import PluginsPage from "@/pages/PluginsPage";
 import type { ProjectEntry } from "@/types/project";
 import { invoke } from "@tauri-apps/api/core";
-import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ChangeEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 
 type CreateProjectRequest = {
@@ -54,6 +62,9 @@ function App() {
   const [activeProject, setActiveProject] = useState<ProjectEntry | null>(null);
 
   const navigate = useNavigate();
+  const handleOpenPlugins = useCallback(() => {
+    navigate("/plugins");
+  }, [navigate]);
 
   useEffect(() => {
     if (!isProjectDialogOpen) {
@@ -188,10 +199,10 @@ function App() {
   };
 
   // Project action dialog (long-press / context menu) state
-  const [projectActionContext, setProjectActionContext] = useState<
-    ProjectEntry | null
-  >(null);
-  const [isProjectActionDialogOpen, setProjectActionDialogOpen] = useState(false);
+  const [projectActionContext, setProjectActionContext] =
+    useState<ProjectEntry | null>(null);
+  const [isProjectActionDialogOpen, setProjectActionDialogOpen] =
+    useState(false);
   const [projectActionError, setProjectActionError] = useState<string | null>(
     null,
   );
@@ -199,7 +210,8 @@ function App() {
     "rename" | null
   >(null);
   const [renameProjectName, setRenameProjectName] = useState("");
-  const [isProcessingProjectAction, setProcessingProjectAction] = useState(false);
+  const [isProcessingProjectAction, setProcessingProjectAction] =
+    useState(false);
 
   const projectLongPressTimerRef = useRef<number | null>(null);
   const projectLongPressTriggeredRef = useRef(false);
@@ -276,8 +288,8 @@ function App() {
           typeof error === "string"
             ? error
             : error instanceof Error
-            ? error.message
-            : "获取项目列表失败";
+              ? error.message
+              : "获取项目列表失败";
         setProjectsError(message);
       })
       .finally(() => setIsLoadingProjects(false));
@@ -293,7 +305,9 @@ function App() {
       await invoke("delete_project_entry", { path: projectActionContext.path });
 
       // If the deleted project was selected to open, clear the selection
-      setProjectToOpen((prev) => (prev?.path === projectActionContext.path ? null : prev));
+      setProjectToOpen((prev) =>
+        prev?.path === projectActionContext.path ? null : prev,
+      );
 
       // If active project is the same, unset and navigate home
       if (activeProject?.path === projectActionContext.path) {
@@ -308,13 +322,19 @@ function App() {
         typeof error === "string"
           ? error
           : error instanceof Error
-          ? error.message
-          : "删除失败";
+            ? error.message
+            : "删除失败";
       setProjectActionError(message);
     } finally {
       setProcessingProjectAction(false);
     }
-  }, [projectActionContext, activeProject, closeProjectActionDialog, refreshProjects, navigate]);
+  }, [
+    projectActionContext,
+    activeProject,
+    closeProjectActionDialog,
+    refreshProjects,
+    navigate,
+  ]);
 
   const handleStartRenameProject = useCallback(() => {
     if (!projectActionContext || isProcessingProjectAction) return;
@@ -363,14 +383,19 @@ function App() {
           typeof error === "string"
             ? error
             : error instanceof Error
-            ? error.message
-            : "重命名失败";
+              ? error.message
+              : "重命名失败";
         setProjectActionError(message);
       } finally {
         setProcessingProjectAction(false);
       }
     },
-    [projectActionContext, renameProjectName, closeProjectActionDialog, refreshProjects],
+    [
+      projectActionContext,
+      renameProjectName,
+      closeProjectActionDialog,
+      refreshProjects,
+    ],
   );
 
   return (
@@ -382,9 +407,11 @@ function App() {
             <HomePage
               onOpenProjectDialog={() => setProjectDialogOpen(true)}
               onOpenCreateDialog={() => setCreateDialogOpen(true)}
+              onOpenPlugins={handleOpenPlugins}
             />
           }
         />
+        <Route path="/plugins" element={<PluginsPage />} />
         <Route
           path="/projects/current"
           element={
@@ -392,6 +419,7 @@ function App() {
               <ProjectWorkspace
                 project={activeProject}
                 onBackHome={handleBackHome}
+                onOpenPlugins={handleOpenPlugins}
               />
             ) : (
               <Navigate to="/" replace />
@@ -436,9 +464,13 @@ function App() {
                           }
                           setProjectToOpen(project);
                         }}
-                        onPointerDown={(e) => handleProjectPointerDown(e as any, project)}
+                        onPointerDown={(e) =>
+                          handleProjectPointerDown(e as any, project)
+                        }
                         onPointerUp={(e) => handleProjectPointerUp(e as any)}
-                        onContextMenu={(e) => handleProjectContextMenu(e as any, project)}
+                        onContextMenu={(e) =>
+                          handleProjectContextMenu(e as any, project)
+                        }
                         className={cn(
                           "w-full rounded-lg border bg-card p-4 text-left text-card-foreground transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                           isSelected
@@ -497,20 +529,49 @@ function App() {
           }
         }}
       >
-        <DialogContent className="max-w-sm" showCloseButton={!isProcessingProjectAction}>
+        <DialogContent
+          className="max-w-sm"
+          showCloseButton={!isProcessingProjectAction}
+        >
           {projectActionContext ? (
             pendingProjectAction === "rename" ? (
               <div className="space-y-5">
                 <div className="items-center text-center">
                   <h3 className="text-lg font-semibold">重命名</h3>
-                  <p className="text-sm">当前项目：<span className="ml-1 font-medium text-foreground">{projectActionContext.name}</span></p>
+                  <p className="text-sm">
+                    当前项目：
+                    <span className="ml-1 font-medium text-foreground">
+                      {projectActionContext.name}
+                    </span>
+                  </p>
                 </div>
-                <form className="space-y-5" onSubmit={handleSubmitRenameProject}>
-                  <Input value={renameProjectName} onChange={(e) => setRenameProjectName(e.target.value)} autoFocus disabled={isProcessingProjectAction} />
-                  {projectActionError ? <p className="text-sm text-destructive">{projectActionError}</p> : null}
+                <form
+                  className="space-y-5"
+                  onSubmit={handleSubmitRenameProject}
+                >
+                  <Input
+                    value={renameProjectName}
+                    onChange={(e) => setRenameProjectName(e.target.value)}
+                    autoFocus
+                    disabled={isProcessingProjectAction}
+                  />
+                  {projectActionError ? (
+                    <p className="text-sm text-destructive">
+                      {projectActionError}
+                    </p>
+                  ) : null}
                   <DialogFooter>
-                    <Button type="button" variant="ghost" onClick={handleCancelRenameProject} disabled={isProcessingProjectAction}>返回</Button>
-                    <Button type="submit" disabled={isProcessingProjectAction}>{isProcessingProjectAction ? "提交中…" : "确认重命名"}</Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={handleCancelRenameProject}
+                      disabled={isProcessingProjectAction}
+                    >
+                      返回
+                    </Button>
+                    <Button type="submit" disabled={isProcessingProjectAction}>
+                      {isProcessingProjectAction ? "提交中…" : "确认重命名"}
+                    </Button>
                   </DialogFooter>
                 </form>
               </div>
@@ -518,15 +579,36 @@ function App() {
               <div className="space-y-5">
                 <div className="items-center text-center">
                   <h3 className="text-lg font-semibold">选择操作</h3>
-                  <p className="text-sm">项目：<span className="ml-1 font-medium text-foreground">{projectActionContext.name}</span></p>
+                  <p className="text-sm">
+                    项目：
+                    <span className="ml-1 font-medium text-foreground">
+                      {projectActionContext.name}
+                    </span>
+                  </p>
                 </div>
-                {projectActionError ? <p className="text-sm text-destructive">{projectActionError}</p> : null}
+                {projectActionError ? (
+                  <p className="text-sm text-destructive">
+                    {projectActionError}
+                  </p>
+                ) : null}
                 <div className="grid grid-cols-2 gap-3">
-                  <Button type="button" variant="ghost" onClick={handleStartRenameProject} disabled={isProcessingProjectAction} className="h-20 flex-col items-start justify-center gap-1 rounded-xl border bg-accent/40 px-4 text-left text-sm font-semibold shadow-sm transition hover:bg-accent">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={handleStartRenameProject}
+                    disabled={isProcessingProjectAction}
+                    className="h-20 flex-col items-start justify-center gap-1 rounded-xl border bg-accent/40 px-4 text-left text-sm font-semibold shadow-sm transition hover:bg-accent"
+                  >
                     <Pencil className="h-5 w-5 text-muted-foreground" />
                     <span>重命名</span>
                   </Button>
-                  <Button type="button" variant="ghost" onClick={handleDeleteProject} disabled={isProcessingProjectAction} className="h-20 flex-col items-start justify-center gap-1 rounded-xl border border-destructive/50 bg-destructive/5 px-4 text-left text-sm font-semibold text-destructive shadow-sm transition hover:bg-destructive/10">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={handleDeleteProject}
+                    disabled={isProcessingProjectAction}
+                    className="h-20 flex-col items-start justify-center gap-1 rounded-xl border border-destructive/50 bg-destructive/5 px-4 text-left text-sm font-semibold text-destructive shadow-sm transition hover:bg-destructive/10"
+                  >
                     <Trash2 className="h-5 w-5" />
                     <span>删除</span>
                   </Button>

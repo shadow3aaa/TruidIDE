@@ -1,18 +1,22 @@
 import CodeMirror from "@uiw/react-codemirror";
 import Lottie from "lottie-react";
+import type { Extension } from "@codemirror/state";
 import mapleFontTheme from "@/lib/codemirror-font";
+import { truidideTheme, truidideThemeDark } from "@/lib/codemirror-theme";
 import waitingAnimation from "@/assets/cat.json";
 import { Button } from "@/components/ui/button";
+import { useEffect, useState } from "react";
 
 type Props = {
   activeFilePath: string | null;
   fileContent: string;
   isLoadingFileContent: boolean;
   fileContentError: string | null;
-  editorExtensions: any[];
+  editorExtensions: Extension[];
   onEditorChange: (value: string) => void;
   refreshFileContent: () => void;
   editorRef?: React.MutableRefObject<any | null>;
+  hasLspExtensions?: boolean;
 };
 
 export function EditorPane({
@@ -24,7 +28,30 @@ export function EditorPane({
   onEditorChange,
   refreshFileContent,
   editorRef,
+  hasLspExtensions = false,
 }: Props) {
+  // 检测暗色模式
+  const [isDark, setIsDark] = useState(() =>
+    document.documentElement.classList.contains("dark"),
+  );
+
+  useEffect(() => {
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName === "class") {
+          setIsDark(document.documentElement.classList.contains("dark"));
+        }
+      });
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
   return (
     // 这个外层 div 仍然是一个 flex item，用于在 ProjectWorkspace 中占据空间。
     <div className="flex flex-1 flex-col min-h-0">
@@ -54,7 +81,11 @@ export function EditorPane({
             <div className="absolute inset-0 no-scrollbar">
               <CodeMirror
                 value={fileContent}
-                extensions={[mapleFontTheme, ...editorExtensions]}
+                extensions={[
+                  mapleFontTheme,
+                  isDark ? truidideThemeDark : truidideTheme,
+                  ...editorExtensions,
+                ]}
                 onChange={onEditorChange}
                 onCreateEditor={(editor) => {
                   try {
@@ -72,6 +103,8 @@ export function EditorPane({
                 basicSetup={{
                   highlightActiveLine: true,
                   bracketMatching: true,
+                  // 当有 LSP 扩展时，禁用默认的自动完成以避免重复
+                  autocompletion: !hasLspExtensions,
                 }}
               />
             </div>

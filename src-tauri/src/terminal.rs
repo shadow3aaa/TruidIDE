@@ -255,7 +255,7 @@ fn start_proot_session_internal(
     cmd.arg(format!("--rootfs={}", rootfs_dir.to_string_lossy()));
 
     if let Some(ref wd) = cwd_in_rootfs {
-        let guest_path = PathBuf::from("/mnt/project");
+        let guest_path = PathBuf::from("/mnt/workspace");
         let full_guest_path = rootfs_dir.join(guest_path.strip_prefix("/").unwrap());
         let _ = fs::create_dir_all(&full_guest_path);
         cmd.arg(format!("--bind={}:{}", wd, guest_path.to_string_lossy()));

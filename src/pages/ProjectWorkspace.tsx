@@ -1,6 +1,14 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import type { Extension } from "@codemirror/state";
 import { css } from "@codemirror/lang-css";
 import { html } from "@codemirror/lang-html";
 import { javascript } from "@codemirror/lang-javascript";
@@ -8,11 +16,14 @@ import { json } from "@codemirror/lang-json";
 import { markdown } from "@codemirror/lang-markdown";
 import { xml } from "@codemirror/lang-xml";
 import { EditorView } from "@codemirror/view";
-import { Home, Menu, X } from "lucide-react";
+import { Home, Menu, Puzzle, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { createLspClient } from "@/lib/lsp";
+import { listPlugins, startLspSession } from "@/lib/plugins";
 import { cn } from "@/lib/utils";
 import type { FileNode, ProjectEntry } from "@/types/project";
+import type { PluginSummary } from "@/types/plugin";
 
 import { CreateEntryDialog } from "./project-workspace/CreateEntryDialog";
 import { EntryActionDialog } from "./project-workspace/EntryActionDialog";
@@ -23,7 +34,9 @@ import {
   type ColumnId,
   type ColumnState,
   type CreateEntryType,
+  type BottomTabId,
 } from "./project-workspace/types";
+import type { PluginLogEntry } from "./project-workspace/PluginOutputPanel";
 import {
   cloneColumnState,
   createColumnState,
@@ -39,12 +52,56 @@ import {
 
 // collapsed height handled inside BottomExplorer
 
+const ENABLE_LSP_DEBUG_LOGS = true;
+
+type LspSessionRecord = {
+  clientEntry: Awaited<ReturnType<typeof createLspClient>>;
+  pluginId: string;
+  languageId: string;
+};
+
+type LspStderrEventPayload = {
+  sessionId?: string;
+  pluginId?: string;
+  languageId?: string;
+  data?: string;
+};
+
+type LspExitEventPayload = {
+  sessionId?: string;
+  pluginId?: string;
+  languageId?: string;
+  statusCode?: number | null;
+  signal?: number | null;
+};
+
+const MAX_PLUGIN_LOG_ENTRIES = 500;
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
 type ProjectWorkspaceProps = {
   project: ProjectEntry;
   onBackHome: () => void;
+  onOpenPlugins: () => void;
 };
 
-function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
+function ProjectWorkspace({
+  project,
+  onBackHome,
+  onOpenPlugins,
+}: ProjectWorkspaceProps) {
   const projectPath = project.path;
   const normalizedProjectPath = useMemo(
     () => normalizeForCompare(projectPath),
@@ -53,7 +110,7 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
 
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [isExplorerOpen, setExplorerOpen] = useState(false);
-  const [activeBottomTab, setActiveBottomTab] = useState<"files" | "preview" | "terminal">("files");
+  const [activeBottomTab, setActiveBottomTab] = useState<BottomTabId>("files");
 
   const [fileTreeVersion, setFileTreeVersion] = useState(0);
   const [fileTree, setFileTree] = useState<FileNode[]>([]);
@@ -74,6 +131,448 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
   const [fileContentError, setFileContentError] = useState<string | null>(null);
   const [fileContentVersion, setFileContentVersion] = useState(0);
   const saveTimerRef = useRef<number | null>(null);
+  const [availablePlugins, setAvailablePlugins] = useState<PluginSummary[]>([]);
+  const [lspExtensions, setLspExtensions] = useState<Extension[] | null>(null);
+  const lspSessionsRef = useRef(new Map<string, LspSessionRecord>());
+  const pendingLspSessionsRef = useRef(
+    new Map<string, Promise<LspSessionRecord>>(),
+  );
+  const logIdCounterRef = useRef(0);
+  const [pluginLogs, setPluginLogs] = useState<PluginLogEntry[]>([]);
+  const appendPluginLog = useCallback((entry: Omit<PluginLogEntry, "id">) => {
+    logIdCounterRef.current += 1;
+    const fallbackId = `${Date.now()}-${logIdCounterRef.current}`;
+    let uniqueId = fallbackId;
+    const globalCrypto =
+      typeof globalThis !== "undefined"
+        ? (globalThis as { crypto?: Crypto }).crypto
+        : undefined;
+    if (globalCrypto && typeof globalCrypto.randomUUID === "function") {
+      try {
+        uniqueId = globalCrypto.randomUUID();
+      } catch {
+        uniqueId = fallbackId;
+      }
+    }
+    setPluginLogs((prev) => {
+      const next = [...prev, { ...entry, id: uniqueId }];
+      if (next.length > MAX_PLUGIN_LOG_ENTRIES) {
+        return next.slice(next.length - MAX_PLUGIN_LOG_ENTRIES);
+      }
+      return next;
+    });
+  }, []);
+  const clearPluginLogs = useCallback(() => {
+    setPluginLogs([]);
+  }, []);
+  const isMountedRef = useRef(true);
+  const detectLanguageId = useCallback((filePath: string) => {
+    const lower = filePath.toLowerCase();
+    if (lower.endsWith(".ts") || lower.endsWith(".tsx")) {
+      return "typescript";
+    }
+    if (lower.endsWith(".js") || lower.endsWith(".jsx")) {
+      return "javascript";
+    }
+    if (lower.endsWith(".json")) {
+      return "json";
+    }
+    if (lower.endsWith(".jsonc")) {
+      return "jsonc";
+    }
+    if (lower.endsWith(".css")) {
+      return "css";
+    }
+    if (lower.endsWith(".html") || lower.endsWith(".htm")) {
+      return "html";
+    }
+    if (lower.endsWith(".md") || lower.endsWith(".markdown")) {
+      return "markdown";
+    }
+    if (lower.endsWith(".xml")) {
+      return "xml";
+    }
+    if (lower.endsWith(".yml") || lower.endsWith(".yaml")) {
+      return "yaml";
+    }
+    if (lower.endsWith(".py")) {
+      return "python";
+    }
+    if (lower.endsWith(".java")) {
+      return "java";
+    }
+    if (lower.endsWith(".rs")) {
+      return "rust";
+    }
+    return "plaintext";
+  }, []);
+  const toFileUri = useCallback((filePath: string) => {
+    const normalized = normalizeFsPath(filePath).replace(/\\/g, "/");
+    if (/^[a-zA-Z]:\//.test(normalized)) {
+      return encodeURI(`file:///${normalized}`);
+    }
+    if (normalized.startsWith("/")) {
+      return encodeURI(`file://${normalized}`);
+    }
+    return encodeURI(`file://${normalized}`);
+  }, []);
+  const disposeLspSession = useCallback((key: string) => {
+    const record = lspSessionsRef.current.get(key);
+    if (!record) {
+      if (ENABLE_LSP_DEBUG_LOGS) {
+        console.debug("[LSP] disposeLspSession: 会话不存在", { key });
+      }
+      return;
+    }
+    if (ENABLE_LSP_DEBUG_LOGS) {
+      console.debug("[LSP] disposeLspSession: 正在清理会话", {
+        key,
+        sessionId: record.clientEntry.sessionId,
+      });
+    }
+    lspSessionsRef.current.delete(key);
+    record.clientEntry.client.disconnect();
+    void record.clientEntry.transport.shutdown();
+  }, []);
+  const ensureLspClient = useCallback(
+    async (plugin: PluginSummary, languageId: string) => {
+      const key = `${plugin.id}::${languageId}`;
+      const existing = lspSessionsRef.current.get(key);
+      if (existing) {
+        return existing;
+      }
+
+      const pending = pendingLspSessionsRef.current.get(key);
+      if (pending) {
+        return pending;
+      }
+
+      const workspaceUri = toFileUri(projectPath);
+      const defaultWorkspaceFolders = [
+        {
+          uri: workspaceUri,
+          name: project.name,
+        },
+      ];
+
+      const pendingPromise = (async () => {
+        let sessionId: string | undefined;
+        let resolvedLanguageId = languageId;
+        try {
+          const session = await startLspSession({
+            pluginId: plugin.id,
+            languageId,
+            workspacePath: projectPath,
+            workspaceFolders: defaultWorkspaceFolders,
+          });
+          sessionId = session.sessionId;
+          resolvedLanguageId = session.languageId;
+          if (ENABLE_LSP_DEBUG_LOGS) {
+            console.debug("[LSP] start_lsp_session 成功", {
+              pluginId: plugin.id,
+              languageId: session.languageId,
+              sessionId: session.sessionId,
+            });
+          }
+          appendPluginLog({
+            timestamp: Date.now(),
+            level: "info",
+            sessionId,
+            pluginId: plugin.id,
+            languageId: resolvedLanguageId,
+            message: "会话已启动，等待初始化响应…",
+          });
+
+          const clientCapabilities =
+            session.clientCapabilities &&
+            typeof session.clientCapabilities === "object"
+              ? (session.clientCapabilities as Record<string, unknown>)
+              : undefined;
+
+          const clientEntry = await createLspClient({
+            sessionId: session.sessionId,
+            rootUri: workspaceUri,
+            clientCapabilities,
+            initializationOptions: session.initializationOptions,
+            workspaceFolders:
+              session.workspaceFolders ?? defaultWorkspaceFolders,
+            timeoutMs: LSP_REQUEST_TIMEOUT_MS,
+            pathMapping: session.pathMapping || null,
+          });
+
+          appendPluginLog({
+            timestamp: Date.now(),
+            level: "info",
+            sessionId,
+            pluginId: plugin.id,
+            languageId: resolvedLanguageId,
+            message: "初始化成功",
+          });
+
+          const record: LspSessionRecord = {
+            clientEntry,
+            pluginId: plugin.id,
+            languageId: session.languageId,
+          };
+          if (ENABLE_LSP_DEBUG_LOGS) {
+            console.debug("[LSP] 会话已建立", {
+              pluginId: plugin.id,
+              languageId: session.languageId,
+              sessionId: session.sessionId,
+            });
+          }
+          lspSessionsRef.current.set(key, record);
+          // 注意：不要在组件卸载时立即清理会话，因为组件可能会重新挂载（如底栏全屏）
+          // 会话会在项目关闭或不再需要时通过 useEffect cleanup 清理
+          return record;
+        } catch (error) {
+          appendPluginLog({
+            timestamp: Date.now(),
+            level: "stderr",
+            sessionId: sessionId ?? "unknown",
+            pluginId: plugin.id,
+            languageId: resolvedLanguageId,
+            message: `初始化失败：${getErrorMessage(error)}`,
+          });
+          throw error;
+        }
+      })();
+
+      pendingLspSessionsRef.current.set(key, pendingPromise);
+      try {
+        return await pendingPromise;
+      } finally {
+        pendingLspSessionsRef.current.delete(key);
+      }
+    },
+    [appendPluginLog, disposeLspSession, project.name, projectPath, toFileUri],
+  );
+
+  useEffect(() => {
+    let disposed = false;
+
+    const setup = async () => {
+      if (!activeFilePath) {
+        setLspExtensions(null);
+        return;
+      }
+
+      const plugin = availablePlugins.find(
+        (item) =>
+          item.enabled !== false &&
+          item.kind?.type === "lsp" &&
+          Array.isArray(item.kind.languageIds) &&
+          item.kind.languageIds.includes(detectLanguageId(activeFilePath)),
+      );
+
+      if (!plugin) {
+        setLspExtensions(null);
+        return;
+      }
+
+      try {
+        const languageId = detectLanguageId(activeFilePath);
+        if (ENABLE_LSP_DEBUG_LOGS) {
+          console.debug("[LSP] 准备绑定插件扩展", {
+            activeFilePath,
+            pluginId: plugin.id,
+            languageId,
+          });
+        }
+        const record = await ensureLspClient(plugin, languageId);
+        await record.clientEntry.client.initializing;
+        if (disposed) {
+          return;
+        }
+        const uri = toFileUri(activeFilePath);
+        const pluginExtensions = record.clientEntry.client.plugin(
+          uri,
+          languageId,
+        );
+        const normalizedExtensions = (
+          Array.isArray(pluginExtensions)
+            ? pluginExtensions
+            : [pluginExtensions]
+        ).filter(Boolean) as Extension[];
+        setLspExtensions(normalizedExtensions);
+        if (ENABLE_LSP_DEBUG_LOGS) {
+          console.debug("[LSP] 已应用插件扩展", {
+            activeFilePath,
+            pluginId: plugin.id,
+            languageId,
+            extensionCount: normalizedExtensions.length,
+          });
+        }
+      } catch (error) {
+        console.error("初始化 LSP 插件失败", error);
+        if (!disposed) {
+          setLspExtensions(null);
+        }
+      }
+    };
+
+    void setup();
+
+    return () => {
+      disposed = true;
+    };
+  }, [
+    activeFilePath,
+    availablePlugins,
+    detectLanguageId,
+    ensureLspClient,
+    toFileUri,
+  ]);
+
+  useEffect(() => {
+    let disposed = false;
+    listPlugins()
+      .then((plugins) => {
+        if (!disposed) {
+          setAvailablePlugins(plugins);
+        }
+      })
+      .catch((error) => {
+        console.error("获取插件列表失败", error);
+      });
+
+    let unlisten: (() => void) | undefined;
+    listen<PluginSummary[]>("truidide://plugins/updated", (event) => {
+      if (!disposed && Array.isArray(event.payload)) {
+        setAvailablePlugins(event.payload);
+      }
+    })
+      .then((dispose) => {
+        unlisten = dispose;
+      })
+      .catch(() => {
+        // ignore listener errors
+      });
+
+    return () => {
+      disposed = true;
+      if (unlisten) {
+        unlisten();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    let disposed = false;
+    const unlistenCallbacks: (() => void)[] = [];
+
+    const attach = async () => {
+      try {
+        const stderrUnlisten = await listen<LspStderrEventPayload>(
+          "truidide://lsp/stderr",
+          (event) => {
+            if (disposed || !event.payload) {
+              return;
+            }
+            const payload = event.payload;
+            appendPluginLog({
+              timestamp: Date.now(),
+              level: "stderr",
+              sessionId: payload.sessionId ?? "unknown",
+              pluginId: payload.pluginId ?? "unknown",
+              languageId: payload.languageId ?? undefined,
+              message: payload.data ?? "",
+            });
+          },
+        );
+        unlistenCallbacks.push(stderrUnlisten);
+      } catch (error) {
+        console.error("监听插件 stderr 失败", error);
+      }
+
+      try {
+        const exitUnlisten = await listen<LspExitEventPayload>(
+          "truidide://lsp/exit",
+          (event) => {
+            if (disposed || !event.payload) {
+              return;
+            }
+            const payload = event.payload;
+            const detailParts: string[] = [];
+            if (
+              payload.statusCode !== undefined &&
+              payload.statusCode !== null
+            ) {
+              detailParts.push(`退出码 ${payload.statusCode}`);
+            }
+            if (payload.signal !== undefined && payload.signal !== null) {
+              detailParts.push(`信号 ${payload.signal}`);
+            }
+            appendPluginLog({
+              timestamp: Date.now(),
+              level: "info",
+              sessionId: payload.sessionId ?? "unknown",
+              pluginId: payload.pluginId ?? "unknown",
+              languageId: payload.languageId ?? undefined,
+              message:
+                detailParts.length > 0
+                  ? `会话结束（${detailParts.join(" / ")}）`
+                  : "会话结束",
+            });
+          },
+        );
+        unlistenCallbacks.push(exitUnlisten);
+      } catch (error) {
+        console.error("监听插件退出失败", error);
+      }
+    };
+
+    void attach();
+
+    return () => {
+      disposed = true;
+      while (unlistenCallbacks.length > 0) {
+        const unlisten = unlistenCallbacks.pop();
+        if (!unlisten) {
+          continue;
+        }
+        try {
+          unlisten();
+        } catch (error) {
+          console.warn("取消插件输出监听失败", error);
+        }
+      }
+    };
+  }, [appendPluginLog]);
+
+  useEffect(() => {
+    const enabledIds = new Set(
+      availablePlugins
+        .filter((item) => item.enabled !== false)
+        .map((item) => item.id),
+    );
+
+    for (const [key, record] of lspSessionsRef.current.entries()) {
+      if (!enabledIds.has(record.pluginId)) {
+        disposeLspSession(key);
+      }
+    }
+  }, [availablePlugins, disposeLspSession]);
+
+  // 当项目路径变化时（即切换到不同项目），清理所有旧的 LSP 会话
+  useEffect(() => {
+    return () => {
+      // 项目切换或组件最终卸载时，清理所有 LSP 会话
+      if (ENABLE_LSP_DEBUG_LOGS) {
+        console.debug("[LSP] 项目卸载，清理所有 LSP 会话");
+      }
+      for (const key of Array.from(lspSessionsRef.current.keys())) {
+        disposeLspSession(key);
+      }
+    };
+  }, [projectPath, disposeLspSession]); // projectPath 变化时会触发清理
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   type PreviewStatus = "idle" | "validating" | "ready" | "offline";
 
@@ -155,11 +654,11 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
 
   const validatePreviewAddress = useCallback(
     async (resolved: string, persistValue?: string | null) => {
-    if (typeof window === "undefined") {
-      setPreviewResolvedBaseUrl(resolved);
-      setPreviewReloadToken((token) => token + 1);
-      return true;
-    }
+      if (typeof window === "undefined") {
+        setPreviewResolvedBaseUrl(resolved);
+        setPreviewReloadToken((token) => token + 1);
+        return true;
+      }
 
       setPreviewStatus("validating");
       setPreviewResolvedBaseUrl(resolved);
@@ -250,9 +749,7 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
   ]);
 
   const handlePreviewFrameLoaded = useCallback(() => {
-    setPreviewStatus((status) =>
-      status === "validating" ? "ready" : status,
-    );
+    setPreviewStatus((status) => (status === "validating" ? "ready" : status));
   }, []);
 
   const handlePreviewFrameError = useCallback(() => {
@@ -295,10 +792,10 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
 
       // If text is a pair like () {} [] <> "" '' , insert both and place cursor between
       const pairs: Record<string, string> = {
-        '(': ')',
-        '[': ']',
-        '{': '}',
-        '<': '>',
+        "(": ")",
+        "[": "]",
+        "{": "}",
+        "<": ">",
         '"': '"',
         "'": "'",
       };
@@ -327,13 +824,15 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
       }
 
       const dom = view.dom || view.contentDOM || view.scrollDOM;
-      if (dom && typeof dom.focus === 'function') dom.focus();
+      if (dom && typeof dom.focus === "function") dom.focus();
     } catch (e) {
       // best-effort: fall back to inserting into textarea if available
       const cm = editorRef.current;
       if (cm && cm.editor) {
         try {
-          const textarea = cm.editor.textarea as HTMLTextAreaElement | undefined;
+          const textarea = cm.editor.textarea as
+            | HTMLTextAreaElement
+            | undefined;
           if (textarea) {
             const start = textarea.selectionStart;
             const end = textarea.selectionEnd;
@@ -518,8 +1017,8 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
       }
     }, 1000);
 
-  // Also refresh once when enabling auto-refresh (on open/switch to files)
-  refreshFileTree(true);
+    // Also refresh once when enabling auto-refresh (on open/switch to files)
+    refreshFileTree(true);
 
     const onFocus = () => {
       if (!isLoadingFileTree) refreshFileTree(true);
@@ -858,7 +1357,7 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
   }, [activeFilePath]);
 
   const editorExtensions = useMemo(() => {
-    const extensions = [EditorView.lineWrapping];
+    const extensions: Extension[] = [EditorView.lineWrapping];
 
     if (!activeFilePath) {
       return extensions;
@@ -880,8 +1379,12 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
       extensions.push(xml());
     }
 
+    if (lspExtensions) {
+      extensions.push(...lspExtensions);
+    }
+
     return extensions;
-  }, [activeFilePath]);
+  }, [activeFilePath, lspExtensions]);
 
   const activeFileDisplayPath = useMemo(() => {
     if (!activeFilePath) {
@@ -907,7 +1410,6 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
 
     return filePathNormalized;
   }, [activeFilePath, projectPath, activeFileName]);
-
   const goToParentDirectoryForColumn = useCallback(
     (columnId: ColumnId) => {
       setColumnViews((prev) => {
@@ -1225,6 +1727,11 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
       };
     });
   }, [activeColumn, projectPath]);
+
+  const handleOpenPlugins = useCallback(() => {
+    onOpenPlugins();
+    setSidebarOpen(false);
+  }, [onOpenPlugins, setSidebarOpen]);
   // removed local isFilesTab; BottomExplorer uses activeBottomTab
 
   const handleEditorChange = (value: string) => {
@@ -1247,9 +1754,10 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
       invoke("save_project_file", {
         filePath: targetPath,
         contents: value,
-      }).catch((error: unknown) => {
-        console.error("保存文件失败", error);
       })
+        .catch((error: unknown) => {
+          console.error("保存文件失败", error);
+        })
         .finally(() => {
           if (saveTimerRef.current === timerId) {
             saveTimerRef.current = null;
@@ -1305,6 +1813,15 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
             <Home className="h-4 w-4" />
             主页
           </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            className="justify-start gap-2"
+            onClick={handleOpenPlugins}
+          >
+            <Puzzle className="h-4 w-4" />
+            插件
+          </Button>
         </nav>
       </aside>
 
@@ -1352,6 +1869,7 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
           onEditorChange={handleEditorChange}
           refreshFileContent={refreshFileContent}
           editorRef={editorRef}
+          hasLspExtensions={lspExtensions !== null && lspExtensions.length > 0}
         />
 
         {isExplorerOpen && (
@@ -1404,6 +1922,8 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
           fileTreeError={fileTreeError}
           insertTextAtCursor={insertTextAtCursor}
           projectPath={projectPath}
+          pluginLogs={pluginLogs}
+          onClearPluginLogs={clearPluginLogs}
         />
 
         <EntryActionDialog
@@ -1441,3 +1961,4 @@ function ProjectWorkspace({ project, onBackHome }: ProjectWorkspaceProps) {
 }
 
 export default ProjectWorkspace;
+const LSP_REQUEST_TIMEOUT_MS = 15_000;

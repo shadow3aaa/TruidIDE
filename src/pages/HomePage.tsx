@@ -3,14 +3,20 @@ import { Button } from "@/components/ui/button";
 type HomePageProps = {
   onOpenProjectDialog: () => void;
   onOpenCreateDialog: () => void;
+  onOpenPlugins: () => void;
 };
 
 const secondaryActions = [
+  { label: "插件", id: "plugins" },
   { label: "设置", id: "settings" },
   { label: "关于", id: "about" },
 ];
 
-function HomePage({ onOpenProjectDialog, onOpenCreateDialog }: HomePageProps) {
+function HomePage({
+  onOpenProjectDialog,
+  onOpenCreateDialog,
+  onOpenPlugins,
+}: HomePageProps) {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-6 py-12">
       <div className="flex w-full max-w-sm flex-col items-stretch gap-6">
@@ -34,7 +40,11 @@ function HomePage({ onOpenProjectDialog, onOpenCreateDialog }: HomePageProps) {
             创建
           </Button>
           {secondaryActions.map((action) => (
-            <Button key={action.id} className="w-full py-6 text-base">
+            <Button
+              key={action.id}
+              className="w-full py-6 text-base"
+              onClick={action.id === "plugins" ? onOpenPlugins : undefined}
+            >
               {action.label}
             </Button>
           ))}

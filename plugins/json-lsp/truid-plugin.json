@@ -1,0 +1,19 @@
+{
+  "id": "truidide.json-lsp",
+  "name": "JSON Language Server",
+  "version": "1.0.0",
+  "description": "Official JSON language server from VSCode",
+  "author": "Microsoft (via vscode-langservers-extracted)",
+  "enabled": true,
+  "tags": ["lsp", "json", "vscode"],
+  "kind": {
+    "type": "lsp",
+    "languageIds": ["json", "jsonc"],
+    "command": "node",
+    "args": [
+      "C:/nvm4w/nodejs/node_modules/vscode-langservers-extracted/bin/vscode-json-language-server",
+      "--stdio"
+    ],
+    "env": {}
+  }
+}

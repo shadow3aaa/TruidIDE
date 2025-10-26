@@ -173,7 +173,9 @@
 /* CodeMirror 编辑器字体覆盖（优先使用 MapleMonoNF，回退为等宽字体） */
 .cm-editor,
 .cm-editor .cm-content {
-  font-family: "MapleMonoNF", ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace;
+  font-family:
+    "MapleMonoNF", ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono",
+    "Courier New", monospace;
   font-size: 13px;
   line-height: 1.5;
 }
@@ -186,7 +188,9 @@
 .xterm {
   background-color: var(--color-card) !important;
   color: var(--color-card-foreground) !important;
-  font-family: "MapleMonoNF", ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace;
+  font-family:
+    "MapleMonoNF", ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono",
+    "Courier New", monospace;
   font-size: 13px;
 }
 .xterm .xterm-viewport,

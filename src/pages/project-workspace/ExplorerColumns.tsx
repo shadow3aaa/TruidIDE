@@ -59,7 +59,8 @@ export function ExplorerColumns({
 }: ExplorerColumnsProps) {
   const colCount = columnOrder.length;
   const activeIndex = columnOrder.findIndex((id) => id === activeColumn);
-  const overlayLeftPercent = colCount > 0 && activeIndex >= 0 ? (activeIndex / colCount) * 100 : 0;
+  const overlayLeftPercent =
+    colCount > 0 && activeIndex >= 0 ? (activeIndex / colCount) * 100 : 0;
   const overlayWidthPercent = colCount > 0 ? 100 / colCount : 0;
 
   return (
@@ -73,14 +74,20 @@ export function ExplorerColumns({
 
       {/* column focus overlay */}
       {activeIndex >= 0 && colCount > 0 ? (
-        <div aria-hidden className="absolute top-0 left-0 h-full w-full pointer-events-none">
+        <div
+          aria-hidden
+          className="absolute top-0 left-0 h-full w-full pointer-events-none"
+        >
           <div
             className={cn(
               "absolute top-0 bottom-0 pointer-events-none bg-primary/5",
               activeIndex === 0 ? "rounded-l-xl" : "",
               activeIndex === colCount - 1 ? "rounded-r-xl" : "",
             )}
-            style={{ left: `${overlayLeftPercent}%`, width: `${overlayWidthPercent}%` }}
+            style={{
+              left: `${overlayLeftPercent}%`,
+              width: `${overlayWidthPercent}%`,
+            }}
           />
         </div>
       ) : null}
@@ -90,7 +97,8 @@ export function ExplorerColumns({
         const isColumnActive = activeColumn === columnId;
         const columnView = data.view;
         const columnCanGoUp =
-          normalizeForCompare(columnView.directoryPath) !== normalizedProjectPath || columnView.stack.length > 0;
+          normalizeForCompare(columnView.directoryPath) !==
+            normalizedProjectPath || columnView.stack.length > 0;
 
         return (
           <Fragment key={columnId}>
@@ -104,9 +112,17 @@ export function ExplorerColumns({
               <div className="no-scrollbar flex-1 overflow-y-auto overflow-x-hidden">
                 <div className="divide-y divide-border">
                   {/* parent (go up) button */}
-                  <div className={cn("relative group -mx-6 px-6", columnCanGoUp ? "" : "opacity-60") }>
+                  <div
+                    className={cn(
+                      "relative group -mx-6 px-6",
+                      columnCanGoUp ? "" : "opacity-60",
+                    )}
+                  >
                     {columnCanGoUp ? (
-                      <span aria-hidden className="absolute inset-0 rounded-none pointer-events-none transition-colors group-hover:bg-muted group-hover:shadow-sm z-0" />
+                      <span
+                        aria-hidden
+                        className="absolute inset-0 rounded-none pointer-events-none transition-colors group-hover:bg-muted group-hover:shadow-sm z-0"
+                      />
                     ) : null}
                     <button
                       type="button"
@@ -116,43 +132,73 @@ export function ExplorerColumns({
                         onGoToParent(columnId);
                       }}
                       disabled={!columnCanGoUp}
-                        className={cn(
+                      className={cn(
                         "relative w-full flex items-center justify-between gap-3 py-3 px-6 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                        columnCanGoUp ? "" : "cursor-not-allowed text-muted-foreground",
+                        columnCanGoUp
+                          ? ""
+                          : "cursor-not-allowed text-muted-foreground",
                       )}
                     >
                       <span className="flex flex-1 items-center gap-3 relative z-10">
                         <Folder
-                          className={cn("h-4 w-4", columnCanGoUp ? "text-primary" : "text-muted-foreground")}
+                          className={cn(
+                            "h-4 w-4",
+                            columnCanGoUp
+                              ? "text-primary"
+                              : "text-muted-foreground",
+                          )}
                           aria-hidden
                         />
-                        <span className="truncate font-medium text-foreground">..</span>
+                        <span className="truncate font-medium text-foreground">
+                          ..
+                        </span>
                       </span>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden />
+                      <ChevronRight
+                        className="h-4 w-4 text-muted-foreground"
+                        aria-hidden
+                      />
                     </button>
                   </div>
 
                   {/* nodes */}
                   {data.nodes.length === 0 ? (
-                    <div className="px-3 py-3 text-xs text-muted-foreground">该目录为空</div>
+                    <div className="px-3 py-3 text-xs text-muted-foreground">
+                      该目录为空
+                    </div>
                   ) : (
                     data.nodes.map((node) => {
-                      const isActiveFile = node.type === "file" && node.path === activeFilePath;
+                      const isActiveFile =
+                        node.type === "file" && node.path === activeFilePath;
                       return (
-                        <div key={node.path} className="relative group -mx-6 px-6">
+                        <div
+                          key={node.path}
+                          className="relative group -mx-6 px-6"
+                        >
                           {isActiveFile ? (
-                            <span aria-hidden className="absolute inset-0 bg-primary/10 shadow-sm rounded-none pointer-events-none transition-colors z-0" />
+                            <span
+                              aria-hidden
+                              className="absolute inset-0 bg-primary/10 shadow-sm rounded-none pointer-events-none transition-colors z-0"
+                            />
                           ) : (
-                            <span aria-hidden className="absolute inset-0 rounded-none pointer-events-none transition-colors group-hover:bg-muted group-hover:shadow-sm z-0" />
+                            <span
+                              aria-hidden
+                              className="absolute inset-0 rounded-none pointer-events-none transition-colors group-hover:bg-muted group-hover:shadow-sm z-0"
+                            />
                           )}
                           <button
                             type="button"
-                            onClick={(event) => onEntryClick(event, columnId, node)}
-                            onPointerDown={(event) => onEntryPointerDown(event, columnId, node)}
+                            onClick={(event) =>
+                              onEntryClick(event, columnId, node)
+                            }
+                            onPointerDown={(event) =>
+                              onEntryPointerDown(event, columnId, node)
+                            }
                             onPointerUp={onEntryPointerUp}
                             onPointerCancel={onEntryPointerUp}
                             onPointerLeave={onEntryPointerUp}
-                            onContextMenu={(event) => onEntryContextMenu(event, columnId, node)}
+                            onContextMenu={(event) =>
+                              onEntryContextMenu(event, columnId, node)
+                            }
                             className={cn(
                               "group relative w-full flex items-center justify-between gap-3 py-3 px-6 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                               isActiveFile ? "text-primary" : "text-foreground",
@@ -160,14 +206,25 @@ export function ExplorerColumns({
                           >
                             <span className="flex flex-1 items-center gap-3 relative z-10">
                               {node.type === "folder" ? (
-                                <Folder className="h-4 w-4 text-primary" aria-hidden />
+                                <Folder
+                                  className="h-4 w-4 text-primary"
+                                  aria-hidden
+                                />
                               ) : (
-                                <FileText className="h-4 w-4 text-muted-foreground" aria-hidden />
+                                <FileText
+                                  className="h-4 w-4 text-muted-foreground"
+                                  aria-hidden
+                                />
                               )}
-                              <span className="truncate font-medium">{node.name}</span>
+                              <span className="truncate font-medium">
+                                {node.name}
+                              </span>
                             </span>
                             {node.type === "folder" ? (
-                              <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden />
+                              <ChevronRight
+                                className="h-4 w-4 text-muted-foreground"
+                                aria-hidden
+                              />
                             ) : null}
                           </button>
                         </div>

@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-read-content-uri"
+description = "Enables the read_content_uri command without any pre-configured scope."
+commands.allow = ["read_content_uri"]
+
+[[permission]]
+identifier = "deny-read-content-uri"
+description = "Denies the read_content_uri command without any pre-configured scope."
+commands.deny = ["read_content_uri"]
