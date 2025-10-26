@@ -14,6 +14,7 @@ import {
 } from "@/lib/android-assets-download";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { platform } from "@tauri-apps/plugin-os";
 
 // 创建 Context 用于共享下载状态
 const DownloadStatusContext = createContext<{
@@ -36,18 +37,16 @@ export function DownloadStatusProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // 检测平台
-    import("@tauri-apps/plugin-os").then(async ({ platform }) => {
-      const p = await platform();
-      const android = p === "android";
-      setIsAndroid(android);
+    const p = platform();
+    const android = p === "android";
+    setIsAndroid(android);
 
-      // 只在 Android 上检查状态
-      if (android) {
-        checkProotStatus().then((ready) => {
-          setIsReady(ready);
-        });
-      }
-    });
+    // 只在 Android 上检查状态
+    if (android) {
+      checkProotStatus().then((ready) => {
+        setIsReady(ready);
+      });
+    }
 
     let unlisten: (() => void) | undefined;
 
@@ -99,22 +98,20 @@ export function ProotDownloadProgress() {
 
   useEffect(() => {
     // 检测平台，只在 Android 上显示
-    import("@tauri-apps/plugin-os").then(async ({ platform }) => {
-      const p = await platform();
-      const android = p === "android";
-      setIsAndroid(android);
+    const p = platform();
+    const android = p === "android";
+    setIsAndroid(android);
 
-      if (!android) {
-        return; // 非 Android 平台直接返回
+    if (!android) {
+      return; // 非 Android 平台直接返回
+    }
+
+    // 检查初始状态
+    checkProotStatus().then((ready) => {
+      setIsReady(ready);
+      if (!ready) {
+        setIsVisible(true); // 如果未准备好，显示下载提示
       }
-
-      // 检查初始状态
-      checkProotStatus().then((ready) => {
-        setIsReady(ready);
-        if (!ready) {
-          setIsVisible(true); // 如果未准备好，显示下载提示
-        }
-      });
     });
 
     let unlisten: (() => void) | undefined;
