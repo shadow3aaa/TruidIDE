@@ -1,5 +1,1 @@
-# Git LFS configuration
-# Track the per-ABI packed assets (libassets.so) with Git LFS so large binary bundles
-# (rootfs, proot binaries, etc.) are stored out-of-band instead of in regular Git objects.
 * text=auto eol=lf
-/src-tauri/gen/android/app/src/main/jniLibs/**/libassets.so filter=lfs diff=lfs merge=lfs -text

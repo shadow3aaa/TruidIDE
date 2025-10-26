@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { useDownloadStatus } from "@/components/ProotDownloadProgress";
 
 type HomePageProps = {
   onOpenProjectDialog: () => void;
@@ -17,8 +18,11 @@ function HomePage({
   onOpenCreateDialog,
   onOpenPlugins,
 }: HomePageProps) {
+  const { isDownloading, isReady } = useDownloadStatus();
+  const isDisabled = isDownloading || !isReady;
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center px-6 py-12">
+    <main className="flex min-h-screen flex-col items-center justify-center px-6 py-12 pb-safe">
       <div className="flex w-full max-w-sm flex-col items-stretch gap-6">
         <header className="text-center">
           <p className="text-sm font-medium text-muted-foreground">欢迎回来</p>
@@ -30,12 +34,14 @@ function HomePage({
           <Button
             className="w-full py-6 text-base"
             onClick={onOpenProjectDialog}
+            disabled={isDisabled}
           >
             打开
           </Button>
           <Button
             className="w-full py-6 text-base"
             onClick={onOpenCreateDialog}
+            disabled={isDisabled}
           >
             创建
           </Button>
@@ -44,6 +50,7 @@ function HomePage({
               key={action.id}
               className="w-full py-6 text-base"
               onClick={action.id === "plugins" ? onOpenPlugins : undefined}
+              disabled={isDisabled}
             >
               {action.label}
             </Button>

@@ -32,6 +32,8 @@ xz2 = "0.1.7"
 
 tempfile = "3.10.1"
 zip = "0.6.6"
+reqwest = { version = "0.12", features = ["blocking", "rustls-tls"], default-features = false }
+sha2 = "0.10"
 tokio = { version = "1.39.3", features = ["process", "io-util", "macros", "sync", "rt", "rt-multi-thread", "time"] }
 uuid = { version = "1.10.0", features = ["v4"] }
 

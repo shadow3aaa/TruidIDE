@@ -670,8 +670,6 @@ async fn spawn_lsp_process(
     workspace_path: &Path,
     session_id: &str,
 ) -> Result<(Child, Option<PathMapping>), String> {
-    use std::os::unix::fs::PermissionsExt;
-
     let env = prepare_proot_env(app)?;
     let default_plugin_mount = format!("/opt/truidide/plugins/{}", plugin.manifest.id);
     let plugin_mount_path = manifest

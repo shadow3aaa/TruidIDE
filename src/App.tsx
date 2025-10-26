@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import HomePage from "@/pages/HomePage";
 import ProjectWorkspace from "@/pages/ProjectWorkspace";
 import PluginsPage from "@/pages/PluginsPage";
+import { ProotDownloadProgress } from "@/components/ProotDownloadProgress";
 import type { ProjectEntry } from "@/types/project";
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -400,6 +401,9 @@ function App() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {/* Proot 资源下载进度组件 - 在 Android 平台自动显示 */}
+      <ProotDownloadProgress />
+
       <Routes>
         <Route
           path="/"

@@ -6,6 +6,18 @@ mod terminal;
 #[cfg(target_os = "android")]
 mod android;
 
+#[cfg(target_os = "android")]
+#[tauri::command]
+async fn check_proot_status(app: tauri::AppHandle) -> Result<bool, String> {
+    android::proot::check_proot_status(app).await
+}
+
+#[cfg(target_os = "android")]
+#[tauri::command]
+async fn download_proot_assets(app: tauri::AppHandle) -> Result<(), String> {
+    android::proot::download_and_prepare_proot(app).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -15,6 +27,9 @@ pub fn run() {
         .plugin(tauri_plugin_file_picker::init())
         .setup(|app| {
             let app_handle = app.handle();
+
+            // 不再自动下载，让用户手动触发
+
             match plugins::PluginHost::obtain(&app_handle) {
                 Ok(host) => {
                     let refresh_host = host.clone();
@@ -56,7 +71,11 @@ pub fn run() {
             plugins::api::send_lsp_payload,
             plugins::api::stop_lsp_session,
             plugins::api::import_plugin,
-            plugins::api::remove_plugin
+            plugins::api::remove_plugin,
+            #[cfg(target_os = "android")]
+            check_proot_status,
+            #[cfg(target_os = "android")]
+            download_proot_assets
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
