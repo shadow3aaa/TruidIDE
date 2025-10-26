@@ -99,17 +99,43 @@ pub fn create_project(
 
     fs::create_dir_all(&candidate).map_err(|e| e.to_string())?;
 
+    // 创建 index.html
     let index_path = candidate.join("index.html");
     let mut file = File::create(&index_path).map_err(|e| e.to_string())?;
     const TEMPLATE: &str = include_str!("templates/basic_web_index.html");
     file.write_all(TEMPLATE.as_bytes())
         .map_err(|e| e.to_string())?;
 
-    let js_path = candidate.join("truid_api.js");
+    // 创建 style.css
+    let css_path = candidate.join("style.css");
+    let mut css_file = File::create(&css_path).map_err(|e| e.to_string())?;
+    const STYLE_CSS: &str = include_str!("templates/style.css");
+    css_file
+        .write_all(STYLE_CSS.as_bytes())
+        .map_err(|e| e.to_string())?;
+
+    // 创建 script.js
+    let js_path = candidate.join("script.js");
     let mut js_file = File::create(&js_path).map_err(|e| e.to_string())?;
-    const TRUID_API_JS: &str = include_str!("templates/truid_api.js");
+    const SCRIPT_JS: &str = include_str!("templates/script.js");
     js_file
-        .write_all(TRUID_API_JS.as_bytes())
+        .write_all(SCRIPT_JS.as_bytes())
+        .map_err(|e| e.to_string())?;
+
+    // 创建 server.py
+    let server_path = candidate.join("server.py");
+    let mut server_file = File::create(&server_path).map_err(|e| e.to_string())?;
+    const SERVER_PY: &str = include_str!("templates/server.py");
+    server_file
+        .write_all(SERVER_PY.as_bytes())
+        .map_err(|e| e.to_string())?;
+
+    // 创建 README.md
+    let readme_path = candidate.join("README.md");
+    let mut readme_file = File::create(&readme_path).map_err(|e| e.to_string())?;
+    const README_MD: &str = include_str!("templates/README.md");
+    readme_file
+        .write_all(README_MD.as_bytes())
         .map_err(|e| e.to_string())?;
 
     let now = std::time::SystemTime::now()

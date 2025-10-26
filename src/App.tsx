@@ -39,7 +39,7 @@ const projectTemplates = [
   {
     id: "basic-web",
     name: "基础 Web 模板",
-    description: "适用于预览和打包简单 Web 应用的默认模板。",
+    description: "适用于预览简单 Web 页面的模板。",
   },
 ];
 

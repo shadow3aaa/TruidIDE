@@ -4099,18 +4099,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tauri-plugin-toast"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "serde",
- "serde_json",
- "tauri",
- "tauri-plugin",
- "thiserror 2.0.17",
-]
-
-[[package]]
 name = "tauri-runtime"
 version = "2.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4565,7 +4553,6 @@ dependencies = [
  "tauri-plugin-file-picker",
  "tauri-plugin-fs",
  "tauri-plugin-opener",
- "tauri-plugin-toast",
  "tempfile",
  "tokio",
  "uuid",

@@ -8,7 +8,6 @@
   "permissions": [
     "core:default",
     "opener:default",
-    "toast:allow-toast",
     "file-picker:default",
     "dialog:allow-open",
     "dialog:default",
