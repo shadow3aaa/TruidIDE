@@ -130,8 +130,8 @@ fn start_proot_session_internal(
     app: tauri::AppHandle,
     cwd_in_rootfs: Option<String>,
 ) -> Result<String, String> {
-    use std::fs;
     use crate::android::proot::prepare_proot_env;
+    use std::fs;
 
     // 使用 android.rs 中的统一 prepare_proot_env 函数
     let env = prepare_proot_env(&app)?;

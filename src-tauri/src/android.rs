@@ -420,7 +420,7 @@ pub mod proot {
             {
                 let rootfs_root = appdata_base.join("rootfs");
                 if rootfs_root.exists() {
-                    let _ = app.emit("proot-download-progress", DownloadProgress::Completed);
+                    // 已经存在且准备就绪，直接返回，不发送事件
                     return Ok(());
                 }
             }
@@ -528,9 +528,6 @@ pub mod proot {
                 )
             })?;
         }
-
-        // 发送完成事件（如果还没发送过的话）
-        let _ = app.emit("proot-download-progress", DownloadProgress::Completed);
 
         Ok(ProotEnv {
             base_dir: dest,

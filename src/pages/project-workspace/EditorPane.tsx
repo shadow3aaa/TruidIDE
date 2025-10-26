@@ -5,7 +5,9 @@ import mapleFontTheme from "@/lib/codemirror-font";
 import { truidideTheme, truidideThemeDark } from "@/lib/codemirror-theme";
 import waitingAnimation from "@/assets/cat.json";
 import { Button } from "@/components/ui/button";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
+import { EditorView } from "@codemirror/view";
+import * as events from "@uiw/codemirror-extensions-events";
 
 type Props = {
   activeFilePath: string | null;
@@ -35,6 +37,13 @@ export function EditorPane({
     document.documentElement.classList.contains("dark"),
   );
 
+  // 字体大小状态（基础大小为 14px）
+  const [fontSize, setFontSize] = useState(14);
+  const touchStateRef = useRef({
+    initialDistance: 0,
+    initialFontSize: 14,
+  });
+
   useEffect(() => {
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
@@ -51,6 +60,91 @@ export function EditorPane({
 
     return () => observer.disconnect();
   }, []);
+
+  // 处理键盘快捷键（Ctrl + 加减号）
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === "=" || e.key === "+") {
+          e.preventDefault();
+          setFontSize((prev) => Math.min(32, prev + 1));
+        } else if (e.key === "-" || e.key === "_") {
+          e.preventDefault();
+          setFontSize((prev) => Math.max(8, prev - 1));
+        } else if (e.key === "0") {
+          e.preventDefault();
+          setFontSize(14); // 重置为默认大小
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // 创建缩放扩展
+  const zoomExtensions = useMemo(() => {
+    // 字体大小主题扩展 - 使用更高优先级
+    const themeExtension = EditorView.theme({
+      "&": {
+        fontSize: `${fontSize}px !important`,
+      },
+      ".cm-content": {
+        fontSize: `${fontSize}px !important`,
+      },
+      ".cm-line": {
+        fontSize: `${fontSize}px !important`,
+      },
+    });
+
+    // 滚轮缩放扩展（Ctrl + 滚轮）
+    const wheelZoomExtension = events.dom({
+      wheel: (event) => {
+        if (event.ctrlKey || event.metaKey) {
+          event.preventDefault();
+          const delta = event.deltaY > 0 ? -1 : 1;
+          const newSize = Math.max(8, Math.min(32, fontSize + delta));
+          setFontSize(newSize);
+        }
+      },
+    });
+
+    // 触摸缩放扩展（双指捏合）
+    const touchZoomExtension = events.dom({
+      touchstart: (event) => {
+        if (event.touches.length === 2) {
+          event.preventDefault();
+          const touch1 = event.touches[0];
+          const touch2 = event.touches[1];
+          const distance = Math.hypot(
+            touch2.clientX - touch1.clientX,
+            touch2.clientY - touch1.clientY,
+          );
+          touchStateRef.current.initialDistance = distance;
+          touchStateRef.current.initialFontSize = fontSize;
+        }
+      },
+      touchmove: (event) => {
+        if (event.touches.length === 2) {
+          event.preventDefault();
+          const touch1 = event.touches[0];
+          const touch2 = event.touches[1];
+          const distance = Math.hypot(
+            touch2.clientX - touch1.clientX,
+            touch2.clientY - touch1.clientY,
+          );
+          const scale = distance / touchStateRef.current.initialDistance;
+          const newFontSize = Math.max(
+            8,
+            Math.min(32, touchStateRef.current.initialFontSize * scale),
+          );
+          setFontSize(newFontSize);
+        }
+      },
+    });
+
+    return [themeExtension, wheelZoomExtension, touchZoomExtension];
+  }, [fontSize]);
 
   return (
     // 这个外层 div 仍然是一个 flex item，用于在 ProjectWorkspace 中占据空间。
@@ -84,6 +178,7 @@ export function EditorPane({
                 extensions={[
                   mapleFontTheme,
                   isDark ? truidideThemeDark : truidideTheme,
+                  ...zoomExtensions,
                   ...editorExtensions,
                 ]}
                 onChange={onEditorChange}

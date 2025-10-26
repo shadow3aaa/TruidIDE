@@ -53,6 +53,7 @@ const RAW_RUNTIME_STATE =
           ["@types/node", "npm:24.8.1"],\
           ["@types/react", "npm:19.2.2"],\
           ["@types/react-dom", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:19.2.2"],\
+          ["@uiw/codemirror-extensions-events", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:4.25.2"],\
           ["@uiw/react-codemirror", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:4.25.2"],\
           ["@vitejs/plugin-react", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:4.7.0"],\
           ["@yarnpkg/sdks", "npm:3.2.3"],\
@@ -2413,6 +2414,28 @@ const RAW_RUNTIME_STATE =
           "@types/codemirror__lint",\
           "@types/codemirror__search",\
           "@types/codemirror__state",\
+          "@types/codemirror__view"\
+        ],\
+        "linkType": "HARD"\
+      }]\
+    ]],\
+    ["@uiw/codemirror-extensions-events", [\
+      ["npm:4.25.2", {\
+        "packageLocation": "../AppData/Local/Yarn/Berry/cache/@uiw-codemirror-extensions-events-npm-4.25.2-c3a6caa675-10c0.zip/node_modules/@uiw/codemirror-extensions-events/",\
+        "packageDependencies": [\
+          ["@uiw/codemirror-extensions-events", "npm:4.25.2"]\
+        ],\
+        "linkType": "SOFT"\
+      }],\
+      ["virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:4.25.2", {\
+        "packageLocation": "./.yarn/__virtual__/@uiw-codemirror-extensions-events-virtual-2e3fc64eb9/2/AppData/Local/Yarn/Berry/cache/@uiw-codemirror-extensions-events-npm-4.25.2-c3a6caa675-10c0.zip/node_modules/@uiw/codemirror-extensions-events/",\
+        "packageDependencies": [\
+          ["@codemirror/view", "npm:6.38.6"],\
+          ["@types/codemirror__view", null],\
+          ["@uiw/codemirror-extensions-events", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:4.25.2"]\
+        ],\
+        "packagePeers": [\
+          "@codemirror/view",\
           "@types/codemirror__view"\
         ],\
         "linkType": "HARD"\
@@ -5681,6 +5704,7 @@ const RAW_RUNTIME_STATE =
           ["@types/node", "npm:24.8.1"],\
           ["@types/react", "npm:19.2.2"],\
           ["@types/react-dom", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:19.2.2"],\
+          ["@uiw/codemirror-extensions-events", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:4.25.2"],\
           ["@uiw/react-codemirror", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:4.25.2"],\
           ["@vitejs/plugin-react", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:4.7.0"],\
           ["@yarnpkg/sdks", "npm:3.2.3"],\
