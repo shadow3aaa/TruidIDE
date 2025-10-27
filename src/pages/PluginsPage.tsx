@@ -253,11 +253,12 @@ function PluginsPage() {
       }}
     >
       <header className="flex flex-wrap items-center justify-between gap-4">
-        <div className="space-y-2">
-          <p className="text-sm text-muted-foreground">扩展能力中心</p>
+        <div className="space-y-2 pt-8">
           <h1 className="text-2xl font-semibold tracking-tight">插件管理</h1>
         </div>
-        <div className="flex items-center gap-3">
+      </header>
+
+      <div className="flex items-center gap-3">
           <Button type="button" variant="outline" onClick={handleBack}>
             返回
           </Button>
@@ -265,7 +266,6 @@ function PluginsPage() {
             {isImporting ? "导入中…" : "导入插件"}
           </Button>
         </div>
-      </header>
 
       {status === "loading" && (
         <p className="text-sm text-muted-foreground">正在加载可用插件…</p>
