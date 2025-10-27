@@ -1987,6 +1987,22 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@xterm/addon-fit@npm:^0.10.0":
+  version: 0.10.0
+  resolution: "@xterm/addon-fit@npm:0.10.0"
+  peerDependencies:
+    "@xterm/xterm": ^5.0.0
+  checksum: 10c0/76926120fc940376afef2cb68b15aec2a99fc628b6e3cc84f2bcb1682ca9b87f982b3c10ff206faf4ebc5b410467b81a7b5e83be37b4ac386586f472e4fa1c61
+  languageName: node
+  linkType: hard
+
+"@xterm/xterm@npm:^5.5.0":
+  version: 5.5.0
+  resolution: "@xterm/xterm@npm:5.5.0"
+  checksum: 10c0/358801feece58617d777b2783bec68dac1f52f736da3b0317f71a34f4e25431fb0b1920244f678b8d673f797145b4858c2a5ccb463a4a6df7c10c9093f1c9267
+  languageName: node
+  linkType: hard
+
 "@yarnpkg/core@npm:^4.4.3":
   version: 4.4.4
   resolution: "@yarnpkg/core@npm:4.4.4"
@@ -4845,6 +4861,8 @@ __metadata:
     "@uiw/codemirror-extensions-events": "npm:^4.25.2"
     "@uiw/react-codemirror": "npm:^4.25.2"
     "@vitejs/plugin-react": "npm:^4.6.0"
+    "@xterm/addon-fit": "npm:^0.10.0"
+    "@xterm/xterm": "npm:^5.5.0"
     "@yarnpkg/sdks": "npm:^3.2.3"
     class-variance-authority: "npm:^0.7.1"
     clsx: "npm:^2.1.1"
@@ -4859,8 +4877,6 @@ __metadata:
     tw-animate-css: "npm:^1.4.0"
     typescript: "npm:~5.8.3"
     vite: "npm:^7.0.4"
-    xterm: "npm:^5.3.0"
-    xterm-addon-fit: "npm:^0.8.0"
   languageName: unknown
   linkType: soft
 
@@ -5181,22 +5197,6 @@ __metadata:
     utf-8-validate:
       optional: true
   checksum: 10c0/eac918213de265ef7cb3d4ca348b891a51a520d839aa51cdb8ca93d4fa7ff9f6ccb339ccee89e4075324097f0a55157c89fa3f7147bde9d8d7e90335dc087b53
-  languageName: node
-  linkType: hard
-
-"xterm-addon-fit@npm:^0.8.0":
-  version: 0.8.0
-  resolution: "xterm-addon-fit@npm:0.8.0"
-  peerDependencies:
-    xterm: ^5.0.0
-  checksum: 10c0/39f77c9ec74bcc048ad74fbc4b9d610070c0a67971837f7edf92a8d21d65189c887986713d6ab22c04e2704253022488324d27fdb2425dc8aa95a9b679703101
-  languageName: node
-  linkType: hard
-
-"xterm@npm:^5.3.0":
-  version: 5.3.0
-  resolution: "xterm@npm:5.3.0"
-  checksum: 10c0/39bf5ea933cc2f65d5970560d065b4db645ed03c820bcf6c6239bd504e41a876ab1a773ad9e4e09476ba85a4891534702b9fbb885b0838d79e6620ed2f856bae
   languageName: node
   linkType: hard
 

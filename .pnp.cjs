@@ -57,6 +57,8 @@ const RAW_RUNTIME_STATE =
           ["@uiw/codemirror-extensions-events", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:4.25.2"],\
           ["@uiw/react-codemirror", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:4.25.2"],\
           ["@vitejs/plugin-react", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:4.7.0"],\
+          ["@xterm/addon-fit", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:0.10.0"],\
+          ["@xterm/xterm", "npm:5.5.0"],\
           ["@yarnpkg/sdks", "npm:3.2.3"],\
           ["class-variance-authority", "npm:0.7.1"],\
           ["clsx", "npm:2.1.1"],\
@@ -71,9 +73,7 @@ const RAW_RUNTIME_STATE =
           ["truidide", "workspace:."],\
           ["tw-animate-css", "npm:1.4.0"],\
           ["typescript", "patch:typescript@npm%3A5.8.3#optional!builtin<compat/typescript>::version=5.8.3&hash=5786d5"],\
-          ["vite", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:7.1.10"],\
-          ["xterm", "npm:5.3.0"],\
-          ["xterm-addon-fit", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:0.8.0"]\
+          ["vite", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:7.1.10"]\
         ],\
         "linkType": "SOFT"\
       }]\
@@ -2521,6 +2521,37 @@ const RAW_RUNTIME_STATE =
         "packagePeers": [\
           "@types/vite",\
           "vite"\
+        ],\
+        "linkType": "HARD"\
+      }]\
+    ]],\
+    ["@xterm/addon-fit", [\
+      ["npm:0.10.0", {\
+        "packageLocation": "../AppData/Local/Yarn/Berry/cache/@xterm-addon-fit-npm-0.10.0-7631de5bba-10c0.zip/node_modules/@xterm/addon-fit/",\
+        "packageDependencies": [\
+          ["@xterm/addon-fit", "npm:0.10.0"]\
+        ],\
+        "linkType": "SOFT"\
+      }],\
+      ["virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:0.10.0", {\
+        "packageLocation": "./.yarn/__virtual__/@xterm-addon-fit-virtual-21f68b77ab/2/AppData/Local/Yarn/Berry/cache/@xterm-addon-fit-npm-0.10.0-7631de5bba-10c0.zip/node_modules/@xterm/addon-fit/",\
+        "packageDependencies": [\
+          ["@types/xterm__xterm", null],\
+          ["@xterm/addon-fit", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:0.10.0"],\
+          ["@xterm/xterm", "npm:5.5.0"]\
+        ],\
+        "packagePeers": [\
+          "@types/xterm__xterm",\
+          "@xterm/xterm"\
+        ],\
+        "linkType": "HARD"\
+      }]\
+    ]],\
+    ["@xterm/xterm", [\
+      ["npm:5.5.0", {\
+        "packageLocation": "../AppData/Local/Yarn/Berry/cache/@xterm-xterm-npm-5.5.0-106735eff7-10c0.zip/node_modules/@xterm/xterm/",\
+        "packageDependencies": [\
+          ["@xterm/xterm", "npm:5.5.0"]\
         ],\
         "linkType": "HARD"\
       }]\
@@ -5719,6 +5750,8 @@ const RAW_RUNTIME_STATE =
           ["@uiw/codemirror-extensions-events", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:4.25.2"],\
           ["@uiw/react-codemirror", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:4.25.2"],\
           ["@vitejs/plugin-react", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:4.7.0"],\
+          ["@xterm/addon-fit", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:0.10.0"],\
+          ["@xterm/xterm", "npm:5.5.0"],\
           ["@yarnpkg/sdks", "npm:3.2.3"],\
           ["class-variance-authority", "npm:0.7.1"],\
           ["clsx", "npm:2.1.1"],\
@@ -5733,9 +5766,7 @@ const RAW_RUNTIME_STATE =
           ["truidide", "workspace:."],\
           ["tw-animate-css", "npm:1.4.0"],\
           ["typescript", "patch:typescript@npm%3A5.8.3#optional!builtin<compat/typescript>::version=5.8.3&hash=5786d5"],\
-          ["vite", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:7.1.10"],\
-          ["xterm", "npm:5.3.0"],\
-          ["xterm-addon-fit", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:0.8.0"]\
+          ["vite", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:7.1.10"]\
         ],\
         "linkType": "SOFT"\
       }]\
@@ -6102,37 +6133,6 @@ const RAW_RUNTIME_STATE =
           "@types/utf-8-validate",\
           "bufferutil",\
           "utf-8-validate"\
-        ],\
-        "linkType": "HARD"\
-      }]\
-    ]],\
-    ["xterm", [\
-      ["npm:5.3.0", {\
-        "packageLocation": "../AppData/Local/Yarn/Berry/cache/xterm-npm-5.3.0-c1d15e5b2c-10c0.zip/node_modules/xterm/",\
-        "packageDependencies": [\
-          ["xterm", "npm:5.3.0"]\
-        ],\
-        "linkType": "HARD"\
-      }]\
-    ]],\
-    ["xterm-addon-fit", [\
-      ["npm:0.8.0", {\
-        "packageLocation": "../AppData/Local/Yarn/Berry/cache/xterm-addon-fit-npm-0.8.0-459db19055-10c0.zip/node_modules/xterm-addon-fit/",\
-        "packageDependencies": [\
-          ["xterm-addon-fit", "npm:0.8.0"]\
-        ],\
-        "linkType": "SOFT"\
-      }],\
-      ["virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:0.8.0", {\
-        "packageLocation": "./.yarn/__virtual__/xterm-addon-fit-virtual-5c5b739f3c/2/AppData/Local/Yarn/Berry/cache/xterm-addon-fit-npm-0.8.0-459db19055-10c0.zip/node_modules/xterm-addon-fit/",\
-        "packageDependencies": [\
-          ["@types/xterm", null],\
-          ["xterm", "npm:5.3.0"],\
-          ["xterm-addon-fit", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:0.8.0"]\
-        ],\
-        "packagePeers": [\
-          "@types/xterm",\
-          "xterm"\
         ],\
         "linkType": "HARD"\
       }]\
