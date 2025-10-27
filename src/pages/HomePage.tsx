@@ -1,5 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { useDownloadStatus } from "@/components/ProotDownloadProgress";
+import Lottie from "lottie-react";
+import catAnimation from "@/assets/cat.json";
 
 type HomePageProps = {
   onOpenProjectDialog: () => void;
@@ -25,16 +27,19 @@ function HomePage({
     <main
       className="flex min-h-screen flex-col items-center justify-center px-6 py-12"
       style={{
-        paddingTop: "max(3rem, var(--safe-area-inset-top, 0))",
+        paddingTop: "max(0rem, var(--safe-area-inset-top, 0))",
         paddingBottom: "max(3rem, var(--safe-area-inset-bottom, 0))",
       }}
     >
       <div className="flex w-full max-w-sm flex-col items-stretch gap-6">
-        <header className="text-center">
-          <p className="text-sm font-medium text-muted-foreground">欢迎回来</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight">
-            TruidIDE
-          </h1>
+        <header className="flex flex-col items-center justify-center text-center">
+          <Lottie
+            animationData={catAnimation}
+            className="h-40 w-40 max-w-full"
+            autoplay
+            loop
+          />
+          <h1 className="text-3xl font-semibold tracking-tight">TruidIDE</h1>
         </header>
         <nav className="flex flex-col gap-3">
           <Button
