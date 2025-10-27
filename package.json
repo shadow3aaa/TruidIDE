@@ -28,6 +28,7 @@
     "@codemirror/view": "^6.38.6",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-slot": "^1.2.3",
+    "@saurl/tauri-plugin-safe-area-insets-css-api": "^0.1.0",
     "@tailwindcss/vite": "^4.1.14",
     "@tauri-apps/api": "~2.9",
     "@tauri-apps/plugin-dialog": "^2",

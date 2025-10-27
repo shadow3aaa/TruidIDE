@@ -15,6 +15,9 @@
     "fs:allow-read",
     "fs:allow-write",
     "os:default",
+    "safe-area-insets-css:default",
+    "safe-area-insets-css:allow-get-top-inset",
+    "safe-area-insets-css:allow-get-bottom-inset",
     {
       "identifier": "fs:scope",
       "allow": [

@@ -44,6 +44,7 @@ const RAW_RUNTIME_STATE =
           ["@codemirror/view", "npm:6.38.6"],\
           ["@radix-ui/react-dialog", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:1.1.15"],\
           ["@radix-ui/react-slot", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:1.2.3"],\
+          ["@saurl/tauri-plugin-safe-area-insets-css-api", "npm:0.1.0"],\
           ["@tailwindcss/vite", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:4.1.14"],\
           ["@tauri-apps/api", "npm:2.9.0"],\
           ["@tauri-apps/cli", "npm:2.8.4"],\
@@ -1821,6 +1822,16 @@ const RAW_RUNTIME_STATE =
         "packageLocation": "./.yarn/unplugged/@rollup-rollup-win32-x64-msvc-npm-4.52.5-491fac4465/node_modules/@rollup/rollup-win32-x64-msvc/",\
         "packageDependencies": [\
           ["@rollup/rollup-win32-x64-msvc", "npm:4.52.5"]\
+        ],\
+        "linkType": "HARD"\
+      }]\
+    ]],\
+    ["@saurl/tauri-plugin-safe-area-insets-css-api", [\
+      ["npm:0.1.0", {\
+        "packageLocation": "../AppData/Local/Yarn/Berry/cache/@saurl-tauri-plugin-safe-area-insets-css-api-npm-0.1.0-52b4d71661-10c0.zip/node_modules/@saurl/tauri-plugin-safe-area-insets-css-api/",\
+        "packageDependencies": [\
+          ["@saurl/tauri-plugin-safe-area-insets-css-api", "npm:0.1.0"],\
+          ["@tauri-apps/api", "npm:2.9.0"]\
         ],\
         "linkType": "HARD"\
       }]\
@@ -5695,6 +5706,7 @@ const RAW_RUNTIME_STATE =
           ["@codemirror/view", "npm:6.38.6"],\
           ["@radix-ui/react-dialog", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:1.1.15"],\
           ["@radix-ui/react-slot", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:1.2.3"],\
+          ["@saurl/tauri-plugin-safe-area-insets-css-api", "npm:0.1.0"],\
           ["@tailwindcss/vite", "virtual:49a8ee88b5cf9ad5c5d104612922835a8a341a60f0c5df1744ae118e10bafe0b71ffd6dbd433ede14178ec7982ba4215a34bb94101eb032783a09bb497529731#npm:4.1.14"],\
           ["@tauri-apps/api", "npm:2.9.0"],\
           ["@tauri-apps/cli", "npm:2.8.4"],\

@@ -1769,7 +1769,13 @@ function ProjectWorkspace({
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div
+      className="flex h-screen overflow-hidden bg-background"
+      style={{
+        paddingTop: "var(--safe-area-inset-top, 0)",
+        paddingBottom: "var(--safe-area-inset-bottom, 0)",
+      }}
+    >
       {/* 遮罩层 */}
       {isSidebarOpen && (
         <button
@@ -1786,6 +1792,10 @@ function ProjectWorkspace({
           "fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r bg-card px-5 py-6 text-sm text-muted-foreground shadow-lg transition-transform duration-300 ease-in-out lg:static lg:z-auto lg:shadow-none lg:translate-x-0",
           isSidebarOpen ? "translate-x-0" : "-translate-x-full",
         )}
+        style={{
+          paddingTop: "max(1.5rem, var(--safe-area-inset-top, 0))",
+          paddingBottom: "max(1.5rem, var(--safe-area-inset-bottom, 0))",
+        }}
       >
         <div className="flex items-center justify-between gap-2 border-b pb-4">
           <h1 className="truncate text-lg font-semibold text-foreground">

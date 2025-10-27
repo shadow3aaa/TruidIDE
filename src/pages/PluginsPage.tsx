@@ -245,7 +245,13 @@ function PluginsPage() {
   }, [plugins]);
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-8 px-6 py-10">
+    <main
+      className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-8 px-6 py-10"
+      style={{
+        paddingTop: "var(--safe-area-inset-top, 0)",
+        paddingBottom: "var(--safe-area-inset-bottom, 0)",
+      }}
+    >
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div className="space-y-2">
           <p className="text-sm text-muted-foreground">扩展能力中心</p>

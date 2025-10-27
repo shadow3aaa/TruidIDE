@@ -141,6 +141,16 @@ export function BottomExplorer(props: Props) {
           ? "fixed inset-x-0 bottom-0 z-40 flex flex-col border-t border-border/60 bg-background/95 shadow-lg transition-[height] duration-300 ease-out supports-[backdrop-filter]:bg-background/70 overflow-hidden h-full"
           : "relative z-10 flex flex-col border-t border-border/60 bg-background/95 shadow-none transition-[height] duration-300 ease-out overflow-visible max-h-[96px] sm:max-h-[56px]",
       )}
+      style={
+        isExplorerOpen
+          ? {
+              paddingTop: "var(--safe-area-inset-top)",
+              paddingBottom: "var(--safe-area-inset-bottom, 0)",
+            }
+          : {
+              paddingBottom: "var(--safe-area-inset-bottom, 0)",
+            }
+      }
       aria-expanded={isExplorerOpen}
     >
       <div className="flex flex-col px-4 pt-2 pb-2">

@@ -26,6 +26,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_file_picker::init())
+        .plugin(tauri_plugin_safe_area_insets_css::init())
         .setup(|app| {
             let app_handle = app.handle();
 

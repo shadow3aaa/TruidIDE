@@ -22,7 +22,13 @@ function HomePage({
   const isDisabled = isDownloading || !isReady;
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center px-6 py-12 pb-safe">
+    <main
+      className="flex min-h-screen flex-col items-center justify-center px-6 py-12"
+      style={{
+        paddingTop: "max(3rem, var(--safe-area-inset-top, 0))",
+        paddingBottom: "max(3rem, var(--safe-area-inset-bottom, 0))",
+      }}
+    >
       <div className="flex w-full max-w-sm flex-col items-stretch gap-6">
         <header className="text-center">
           <p className="text-sm font-medium text-muted-foreground">欢迎回来</p>

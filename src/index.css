@@ -132,6 +132,7 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Safe area insets are handled by individual components to avoid layout issues with 100vh */
   }
 }
 
