@@ -19,10 +19,7 @@ export const truidideTheme = EditorView.theme(
       borderLeftColor: "var(--color-primary)",
     },
     "&.cm-focused .cm-selectionBackground, ::selection": {
-      backgroundColor: "var(--color-accent)",
-    },
-    ".cm-activeLine": {
-      backgroundColor: "var(--color-muted)",
+      color: "#1A237E",
     },
     ".cm-gutters": {
       backgroundColor: "var(--color-card)",

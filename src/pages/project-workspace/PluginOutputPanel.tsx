@@ -220,6 +220,7 @@ export function PluginOutputPanel({ logs, onClear }: PluginOutputPanelProps) {
       <div
         ref={containerRef}
         className="flex-1 overflow-auto bg-muted/30 px-4 py-3"
+        style={{ userSelect: "text" }}
       >
         {filteredLogs.length === 0 ? (
           <p className="text-xs text-muted-foreground">

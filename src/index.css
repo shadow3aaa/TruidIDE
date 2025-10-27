@@ -133,6 +133,11 @@
   body {
     @apply bg-background text-foreground;
     /* Safe area insets are handled by individual components to avoid layout issues with 100vh */
+    user-select: none;
+  }
+  #root,
+  .app-root {
+    user-select: none;
   }
 }
 
@@ -179,29 +184,4 @@
     "Courier New", monospace;
   font-size: 13px;
   line-height: 1.5;
-}
-
-/* xterm theme integration: prefer app CSS variables so the terminal
-   background and text color follow the application's theme. Use
-   !important sparingly here as xterm's own stylesheet sets explicit
-   backgrounds we need to override.
-*/
-.xterm {
-  background-color: var(--color-card) !important;
-  color: var(--color-card-foreground) !important;
-  font-family:
-    "MapleMonoNF", ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono",
-    "Courier New", monospace;
-  font-size: 13px;
-}
-.xterm .xterm-viewport,
-.xterm .xterm-screen,
-.xterm .xterm-rows {
-  background-color: var(--color-card) !important;
-  color: var(--color-card-foreground) !important;
-}
-.xterm canvas {
-  /* Keep canvas transparent so container/background colors show
-     through while xterm's canvas renderer repaints. */
-  background-color: transparent !important;
 }
