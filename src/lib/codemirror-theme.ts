@@ -18,8 +18,11 @@ export const truidideTheme = EditorView.theme(
     ".cm-cursor, .cm-dropCursor": {
       borderLeftColor: "var(--color-primary)",
     },
-    "&.cm-focused .cm-selectionBackground, ::selection": {
+    ".cm-selectionBackground, ::selection": {
       color: "#1A237E",
+    },
+    "&.cm-focused": {
+      outline: "none",
     },
     ".cm-gutters": {
       backgroundColor: "var(--color-card)",
