@@ -24,7 +24,7 @@
      inkscape:lockguides="false"
      inkscape:zoom="1.6360246"
      inkscape:cx="250.60748"
-     inkscape:cy="167.17353"
+     inkscape:cy="167.78476"
      inkscape:window-width="2560"
      inkscape:window-height="1494"
      inkscape:window-x="-11"
@@ -77,16 +77,6 @@
          id="rect1" />
     </clipPath>
   </defs>
-  <path
-     style="fill:#c5cae9;fill-opacity:1;stroke-width:6.95652;stroke-linecap:round;stroke-linejoin:round;paint-order:fill markers stroke"
-     id="rect23"
-     width="712.34784"
-     height="712.34784"
-     x="-1.1368684e-13"
-     y="-3.5527137e-15"
-     sodipodi:type="rect"
-     d="M 139.13044,0 H 573.2174 c 76.83962,0 139.13044,62.29082 139.13044,139.13044 V 573.2174 c 0,76.83962 -62.29082,139.13044 -139.13044,139.13044 H 139.13044 C 62.29082,712.34784 0,650.05702 0,573.2174 V 139.13044 C 0,62.29082 62.29082,0 139.13044,0 Z"
-     inkscape:path-effect="#path-effect2" />
   <g
      clip-path="url(#__lottie_element_2)"
      id="g23"
