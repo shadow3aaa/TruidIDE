@@ -139,21 +139,20 @@ export function BottomExplorer(props: Props) {
         // When expanded: fixed full-height overlay; when collapsed: participate in layout (not fixed)
         isExplorerOpen
           ? "fixed inset-x-0 bottom-0 z-40 flex flex-col border-t border-border/60 bg-background/95 shadow-lg transition-[height] duration-300 ease-out supports-[backdrop-filter]:bg-background/70 overflow-hidden h-full"
-          : "relative z-10 flex flex-col border-t border-border/60 bg-background/95 shadow-none transition-[height] duration-300 ease-out overflow-visible max-h-[96px] sm:max-h-[56px]",
+          : "relative z-10 flex flex-col border-t border-border/60 bg-background/95 shadow-none transition-[height] duration-300 ease-out overflow-visible",
       )}
-      style={
-        isExplorerOpen
-          ? {
-              paddingTop: "var(--safe-area-inset-top)",
-              paddingBottom: "var(--safe-area-inset-bottom, 0)",
-            }
-          : {
-              paddingBottom: "var(--safe-area-inset-bottom, 0)",
-            }
-      }
+      style={{
+        paddingTop: "var(--safe-area-inset-top, 0)",
+        paddingBottom: "var(--safe-area-inset-bottom, 0)",
+      }}
       aria-expanded={isExplorerOpen}
     >
-      <div className="flex flex-col px-4 pt-2 pb-2">
+      <div
+        className={cn(
+          "flex flex-col",
+          isExplorerOpen ? "px-4 pt-2 pb-2" : "px-0 py-0",
+        )}
+      >
         <div className="flex items-center justify-between gap-2">
           {isExplorerOpen ? (
             <div className="flex items-center gap-2 w-full">
@@ -249,54 +248,142 @@ export function BottomExplorer(props: Props) {
 
         {/* Collapsed-only quick keys row */}
         {!isExplorerOpen ? (
-          <div className="flex items-start justify-between gap-4 pt-2">
-            <div className="flex flex-wrap items-center gap-2">
-              {[
-                "[",
-                "]",
-                "{",
-                "}",
-                "(",
-                ")",
-                "<",
-                ">",
-                "=",
-                "+",
-                "-",
-                "*",
-                "/",
-              ].map((key) => (
-                <Button
-                  key={key}
-                  variant="outline"
-                  size="sm"
-                  className="px-3"
-                  onPointerDown={(e) => e.preventDefault()}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => props.insertTextAtCursor?.(key)}
-                >
-                  {key}
-                </Button>
-              ))}
+          <div className="flex items-center justify-center w-full">
+            <div className="flex-1 select-none">
+              <div className="flex flex-col items-center w-full p-0 m-0 gap-0">
+                {[
+                  [
+                    { type: "key", value: "[" },
+                    { type: "key", value: "]" },
+                    { type: "key", value: "{" },
+                    { type: "key", value: "}" },
+                    { type: "key", value: "(" },
+                    { type: "key", value: ")" },
+                    { type: "key", value: "<" },
+                    { type: "key", value: ">" },
+                  ],
+                  [
+                    { type: "key", value: "=" },
+                    { type: "key", value: "+" },
+                    { type: "key", value: "-" },
+                    { type: "key", value: "*" },
+                    { type: "key", value: "/" },
+                    { type: "key", value: "_" },
+                    { type: "key", value: ":" },
+                    { type: "action", value: "expand" },
+                  ],
+                ].map((row, rowIdx) => (
+                  <div
+                    key={rowIdx}
+                    className="flex flex-row w-full p-0 m-0 gap-0"
+                    style={{ borderSpacing: 0 }}
+                  >
+                    {row.map((item, itemIdx) => {
+                      const key = `${rowIdx}-${itemIdx}`;
+                      const baseClass =
+                        "truid-termux-key flex-1 flex items-center justify-center h-6 m-0 bg-white text-[11px] font-medium select-none transition active:scale-95 cursor-pointer";
+
+                      if (item.type === "action" && item.value === "expand") {
+                        return (
+                          <div
+                            key={key}
+                            className={cn(baseClass, "truid-expand-key")}
+                            tabIndex={0}
+                            role="button"
+                            aria-label="展开底部面板"
+                            title="展开底部面板"
+                            onPointerDown={(e) => e.preventDefault()}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={toggleExplorer}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                toggleExplorer();
+                              }
+                            }}
+                            style={{ minWidth: 0 }}
+                          >
+                            <ChevronUp className="h-5 w-5" />
+                          </div>
+                        );
+                      }
+
+                      const handleClick = () => {
+                        props.insertTextAtCursor?.(item.value);
+                      };
+                      return (
+                        <div
+                          key={key}
+                          className={cn(baseClass)}
+                          tabIndex={0}
+                          role="button"
+                          aria-label={item.value}
+                          title={item.value}
+                          onPointerDown={(e) => e.preventDefault()}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={handleClick}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              handleClick();
+                            }
+                          }}
+                          style={{ minWidth: 0 }}
+                        >
+                          {item.value}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="flex items-center">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="flex-shrink-0"
-                onPointerDown={(e) => e.preventDefault()}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={toggleExplorer}
-                aria-label="展开底部面板"
-              >
-                <ChevronUp className="h-5 w-5" />
-              </Button>
-            </div>
+            <style>{`
+              .truid-termux-key {
+                background: #fff;
+                border: none;
+                border-radius: 0;
+                box-shadow: none;
+                margin: 0;
+                user-select: none;
+                touch-action: manipulation;
+                transition: background 0.15s, color 0.15s, transform 0.1s;
+                min-width: 0;
+                min-height: 24px;
+                font-size: 11px;
+                letter-spacing: 0.01em;
+                font-family: inherit;
+                font-weight: 500;
+                text-align: center;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 0;
+                color: #222;
+              }
+              .truid-termux-key:active {
+                background: #f3f3f3;
+                transform: scale(0.97);
+              }
+              .truid-termux-key-active {
+                background: #111 !important;
+                color: #fff !important;
+              }
+              /* 区分展开按钮样式：黑底白字 */
+              .truid-expand-key {
+                background: #000;
+                color: #fff;
+              }
+              .truid-expand-key:active {
+                background: #111;
+                transform: scale(0.97);
+              }
+            `}</style>
           </div>
         ) : null}
       </div>
-      <div className="relative flex-1 overflow-hidden px-4 pb-5 pt-2">
-        {isExplorerOpen && (
+      {isExplorerOpen && (
+        <div className="relative flex-1 overflow-hidden px-4 pb-5 pt-2">
           <>
             {isFilesTab ? (
               <div className="flex h-full flex-col overflow-hidden">
@@ -574,8 +661,8 @@ export function BottomExplorer(props: Props) {
               </div>
             )}
           </>
-        )}
-      </div>
+        </div>
+      )}
     </section>
   );
 }
