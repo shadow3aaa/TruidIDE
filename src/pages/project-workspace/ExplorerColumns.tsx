@@ -67,8 +67,10 @@ export function ExplorerColumns({
     <Card className="relative flex-row gap-0 h-full overflow-hidden">
       {/* directory pill */}
       <div className="absolute left-4 top-4 z-10">
-        <div className="inline-flex max-w-[36rem] items-center gap-2 truncate px-3 py-1 rounded-md bg-black text-white text-sm font-medium shadow-sm">
-          <span className="truncate">{activeDirectoryDisplayPath}</span>
+        <div className="inline-flex max-w-[36rem] items-center gap-2 px-3 py-1 rounded-md bg-black text-white text-sm font-medium shadow-sm">
+          <span className="break-all text-left leading-snug">
+            {activeDirectoryDisplayPath}
+          </span>
         </div>
       </div>
 
@@ -109,7 +111,7 @@ export function ExplorerColumns({
               )}
               onMouseDown={() => onColumnFocus(columnId)}
             >
-              <div className="no-scrollbar flex-1 overflow-y-auto overflow-x-hidden">
+              <div className="no-scrollbar flex-1 overflow-y-auto overflow-x-hidden px-1">
                 <div className="divide-y divide-border">
                   {/* parent (go up) button */}
                   <div
@@ -133,28 +135,28 @@ export function ExplorerColumns({
                       }}
                       disabled={!columnCanGoUp}
                       className={cn(
-                        "relative w-full flex items-center justify-between gap-3 py-3 px-6 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        "relative w-full flex items-start justify-between gap-3 py-3 px-6 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                         columnCanGoUp
                           ? ""
                           : "cursor-not-allowed text-muted-foreground",
                       )}
                     >
-                      <span className="flex flex-1 items-center gap-3 relative z-10">
+                      <span className="flex flex-1 items-start gap-3 relative z-10">
                         <Folder
                           className={cn(
-                            "h-4 w-4",
+                            "h-4 w-4 shrink-0",
                             columnCanGoUp
                               ? "text-primary"
                               : "text-muted-foreground",
                           )}
                           aria-hidden
                         />
-                        <span className="truncate font-medium text-foreground">
+                        <span className="break-all text-left font-medium text-foreground leading-snug">
                           ..
                         </span>
                       </span>
                       <ChevronRight
-                        className="h-4 w-4 text-muted-foreground"
+                        className="h-4 w-4 shrink-0 text-muted-foreground"
                         aria-hidden
                       />
                     </button>
@@ -199,30 +201,30 @@ export function ExplorerColumns({
                             onContextMenu={(event) =>
                               onEntryContextMenu(event, columnId, node)
                             }
-                            className={cn(
-                              "group relative w-full flex items-center justify-between gap-3 py-3 px-6 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                              isActiveFile ? "text-primary" : "text-foreground",
-                            )}
+                          className={cn(
+                            "group relative w-full flex items-start justify-between gap-3 py-3 px-6 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            isActiveFile ? "text-primary" : "text-foreground",
+                          )}
                           >
-                            <span className="flex flex-1 items-center gap-3 relative z-10">
+                            <span className="flex flex-1 items-start gap-3 relative z-10">
                               {node.type === "folder" ? (
                                 <Folder
-                                  className="h-4 w-4 text-primary"
+                                  className="h-4 w-4 shrink-0 text-primary"
                                   aria-hidden
                                 />
                               ) : (
                                 <FileText
-                                  className="h-4 w-4 text-muted-foreground"
+                                  className="h-4 w-4 shrink-0 text-muted-foreground"
                                   aria-hidden
                                 />
                               )}
-                              <span className="truncate font-medium">
+                              <span className="break-all text-left font-medium leading-snug">
                                 {node.name}
                               </span>
                             </span>
                             {node.type === "folder" ? (
                               <ChevronRight
-                                className="h-4 w-4 text-muted-foreground"
+                                className="h-4 w-4 shrink-0 text-muted-foreground"
                                 aria-hidden
                               />
                             ) : null}

@@ -5,14 +5,72 @@ use crate::fs_utils::{
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
+
+#[cfg(target_os = "android")]
+use crate::android::proot::{resolve_guest_path, ProotEnv};
+
+#[cfg(target_os = "android")]
+fn host_path_to_guest(env: &ProotEnv, host_path: &Path) -> Option<String> {
+    let relative = host_path.strip_prefix(&env.rootfs_dir).ok()?;
+    let mut guest = PathBuf::from("/");
+    if !relative.as_os_str().is_empty() {
+        guest.push(relative);
+    }
+    Some(guest.to_string_lossy().replace('\\', "/"))
+}
+
+#[cfg(target_os = "android")]
+fn convert_entries_to_guest(env: &ProotEnv, entries: &mut [FileTreeEntry]) {
+    for entry in entries.iter_mut() {
+        if let Some(guest_path) = host_path_to_guest(env, Path::new(&entry.path)) {
+            entry.path = guest_path;
+        }
+        if let Some(children) = &mut entry.children {
+            convert_entries_to_guest(env, children);
+        }
+    }
+}
+
+#[cfg(target_os = "android")]
+fn resolve_android_path(
+    app: &tauri::AppHandle,
+    raw_path: &str,
+    error_label: &str,
+) -> Result<(PathBuf, bool), String> {
+    let trimmed = raw_path.trim();
+    if trimmed.starts_with('/') {
+        let host = resolve_guest_path(app, trimmed)?;
+        Ok((host, true))
+    } else {
+        let path = PathBuf::from(trimmed);
+        let canonical = path
+            .canonicalize()
+            .map_err(|e| format!("{error_label}: {e}"))?;
+        Ok((canonical, false))
+    }
+}
 
 #[derive(Serialize)]
 pub struct ProjectEntry {
     pub name: String,
     pub path: String,
     pub last_modified_secs: Option<u64>,
+}
+
+#[cfg(target_os = "android")]
+#[tauri::command]
+pub fn get_projects_root(app: tauri::AppHandle) -> Result<String, String> {
+    let _ = crate::android::proot::prepare_proot_env(&app)?;
+    Ok("/root".to_string())
+}
+
+#[cfg(not(target_os = "android"))]
+#[tauri::command]
+pub fn get_projects_root(app: tauri::AppHandle) -> Result<String, String> {
+    let root = ensure_projects_dir(&app)?;
+    Ok(root.to_string_lossy().into_owned())
 }
 
 #[tauri::command]
@@ -157,39 +215,65 @@ pub fn list_project_tree(
     app: tauri::AppHandle,
     project_path: String,
 ) -> Result<Vec<FileTreeEntry>, String> {
+    #[cfg(target_os = "android")]
     let projects_root = ensure_projects_dir(&app)?
         .canonicalize()
         .map_err(|e| e.to_string())?;
 
-    let requested_path = PathBuf::from(project_path);
-    let canonical_requested = requested_path
+    #[cfg(target_os = "android")]
+    let (canonical_requested, is_guest_path) =
+        resolve_android_path(&app, &project_path, "无法访问项目目录")?;
+
+    #[cfg(not(target_os = "android"))]
+    let canonical_requested = PathBuf::from(&project_path)
         .canonicalize()
         .map_err(|e| format!("无法访问项目目录: {e}"))?;
 
-    if !canonical_requested.starts_with(&projects_root) {
-        return Err("项目路径不在受信目录内".into());
+    #[cfg(target_os = "android")]
+    {
+        if !is_guest_path && !canonical_requested.starts_with(&projects_root) {
+            return Err("项目路径不在受信目录内".into());
+        }
     }
 
     if !canonical_requested.is_dir() {
         return Err("目标路径不是有效的项目目录".into());
     }
 
-    read_directory_entries(&canonical_requested)
+    let mut entries = read_directory_entries(&canonical_requested)?;
+
+    #[cfg(target_os = "android")]
+    {
+        if is_guest_path {
+            let env = crate::android::proot::prepare_proot_env(&app)?;
+            convert_entries_to_guest(&env, &mut entries);
+        }
+    }
+
+    Ok(entries)
 }
 
 #[tauri::command]
 pub fn read_project_file(app: tauri::AppHandle, file_path: String) -> Result<String, String> {
+    #[cfg(target_os = "android")]
     let projects_root = ensure_projects_dir(&app)?
         .canonicalize()
         .map_err(|e| e.to_string())?;
 
-    let requested_path = PathBuf::from(file_path);
-    let canonical_requested = requested_path
+    #[cfg(target_os = "android")]
+    let (canonical_requested, is_guest_path) =
+        resolve_android_path(&app, &file_path, "无法读取文件")?;
+
+    #[cfg(not(target_os = "android"))]
+    let canonical_requested = PathBuf::from(&file_path)
         .canonicalize()
         .map_err(|e| format!("无法读取文件: {e}"))?;
 
-    if !canonical_requested.starts_with(&projects_root) {
-        return Err("文件路径不在受信目录内".into());
+    #[cfg(target_os = "android")]
+    {
+        if !is_guest_path && !canonical_requested.starts_with(&projects_root) {
+            return Err("文件路径不在受信目录内".into());
+        }
     }
 
     if !canonical_requested.is_file() {
@@ -207,17 +291,25 @@ pub fn save_project_file(
     file_path: String,
     contents: String,
 ) -> Result<(), String> {
+    #[cfg(target_os = "android")]
     let projects_root = ensure_projects_dir(&app)?
         .canonicalize()
         .map_err(|e| e.to_string())?;
 
-    let requested_path = PathBuf::from(&file_path);
-    let canonical_requested = requested_path
+    #[cfg(target_os = "android")]
+    let (canonical_requested, is_guest_path) =
+        resolve_android_path(&app, &file_path, "无法保存文件")?;
+
+    #[cfg(not(target_os = "android"))]
+    let canonical_requested = PathBuf::from(&file_path)
         .canonicalize()
         .map_err(|e| format!("无法保存文件: {e}"))?;
 
-    if !canonical_requested.starts_with(&projects_root) {
-        return Err("文件路径不在受信目录内".into());
+    #[cfg(target_os = "android")]
+    {
+        if !is_guest_path && !canonical_requested.starts_with(&projects_root) {
+            return Err("文件路径不在受信目录内".into());
+        }
     }
 
     if canonical_requested.is_dir() {
@@ -243,17 +335,32 @@ pub fn create_project_entry(
     name: String,
     kind: NewEntryKind,
 ) -> Result<(), String> {
+    #[allow(unused)]
     let projects_root = ensure_projects_dir(&app)?
         .canonicalize()
         .map_err(|e| e.to_string())?;
 
-    let parent = PathBuf::from(parent_path);
-    let canonical_parent = parent
+    #[cfg(target_os = "android")]
+    let (canonical_parent, is_guest_path) =
+        resolve_android_path(&app, &parent_path, "无法访问目标目录")?;
+
+    #[cfg(not(target_os = "android"))]
+    let canonical_parent = PathBuf::from(&parent_path)
         .canonicalize()
         .map_err(|e| format!("无法访问目标目录: {e}"))?;
 
-    if !canonical_parent.starts_with(&projects_root) {
-        return Err("目标路径不在受信目录内".into());
+    #[cfg(not(target_os = "android"))]
+    {
+        if !canonical_parent.starts_with(&projects_root) {
+            return Err("目标路径不在受信目录内".into());
+        }
+    }
+
+    #[cfg(target_os = "android")]
+    {
+        if !is_guest_path && !canonical_parent.starts_with(&projects_root) {
+            return Err("目标路径不在受信目录内".into());
+        }
     }
 
     if !canonical_parent.is_dir() {
@@ -281,20 +388,40 @@ pub fn create_project_entry(
 
 #[tauri::command]
 pub fn delete_project_entry(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    #[cfg(not(target_os = "android"))]
     let projects_root = ensure_projects_dir(&app)?
         .canonicalize()
         .map_err(|e| e.to_string())?;
 
-    let entry_path = PathBuf::from(&path);
-    let canonical_entry = entry_path
+    #[cfg(target_os = "android")]
+    let projects_root = ensure_projects_dir(&app)?
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
+
+    #[cfg(target_os = "android")]
+    let (canonical_entry, is_guest_path) = resolve_android_path(&app, &path, "无法删除目标")?;
+
+    #[cfg(not(target_os = "android"))]
+    let canonical_entry = PathBuf::from(&path)
         .canonicalize()
         .map_err(|e| format!("无法删除目标: {e}"))?;
 
-    if !canonical_entry.starts_with(&projects_root) {
-        return Err("目标路径不在受信目录内".into());
+    #[cfg(target_os = "android")]
+    {
+        if !is_guest_path && !canonical_entry.starts_with(&projects_root) {
+            return Err("目标路径不在受信目录内".into());
+        }
     }
 
-    if canonical_entry == projects_root {
+    #[cfg(not(target_os = "android"))]
+    if canonical_entry.starts_with(&projects_root) && canonical_entry == projects_root {
+        return Err("无法删除项目根目录".into());
+    }
+
+    #[cfg(target_os = "android")]
+    if is_guest_path {
+        return Err("目标路径不在受信目录内".into());
+    } else if canonical_entry == projects_root {
         return Err("无法删除项目根目录".into());
     }
 
@@ -315,16 +442,33 @@ pub fn rename_project_entry(
     path: String,
     new_name: String,
 ) -> Result<(), String> {
+    #[cfg(not(target_os = "android"))]
     let projects_root = ensure_projects_dir(&app)?
         .canonicalize()
         .map_err(|e| e.to_string())?;
 
-    let entry_path = PathBuf::from(&path);
-    let canonical_entry = entry_path
+    #[cfg(target_os = "android")]
+    let projects_root = ensure_projects_dir(&app)?
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
+
+    #[cfg(target_os = "android")]
+    let (canonical_entry, is_guest_path) = resolve_android_path(&app, &path, "无法重命名目标")?;
+
+    #[cfg(not(target_os = "android"))]
+    let canonical_entry = PathBuf::from(&path)
         .canonicalize()
         .map_err(|e| format!("无法重命名目标: {e}"))?;
 
+    #[cfg(not(target_os = "android"))]
     if !canonical_entry.starts_with(&projects_root) {
+        return Err("目标路径不在受信目录内".into());
+    }
+
+    #[cfg(target_os = "android")]
+    if !is_guest_path && !canonical_entry.starts_with(&projects_root) {
+        return Err("目标路径不在受信目录内".into());
+    } else if is_guest_path {
         return Err("目标路径不在受信目录内".into());
     }
 
@@ -355,25 +499,33 @@ pub fn copy_project_entry(
     source_path: String,
     target_directory_path: String,
 ) -> Result<(), String> {
+    #[cfg(target_os = "android")]
     let projects_root = ensure_projects_dir(&app)?
         .canonicalize()
         .map_err(|e| e.to_string())?;
 
-    let source = PathBuf::from(&source_path);
-    let canonical_source = source
+    #[cfg(target_os = "android")]
+    let (canonical_source, source_is_guest) =
+        resolve_android_path(&app, &source_path, "无法复制源路径")?;
+
+    #[cfg(not(target_os = "android"))]
+    let canonical_source = PathBuf::from(&source_path)
         .canonicalize()
         .map_err(|e| format!("无法复制源路径: {e}"))?;
 
-    if !canonical_source.starts_with(&projects_root) {
-        return Err("源路径不在受信目录内".into());
-    }
+    #[cfg(target_os = "android")]
+    let (canonical_target_dir, target_is_guest) =
+        resolve_android_path(&app, &target_directory_path, "无法访问目标目录")?;
 
-    let target_dir = PathBuf::from(&target_directory_path);
-    let canonical_target_dir = target_dir
+    #[cfg(not(target_os = "android"))]
+    let canonical_target_dir = PathBuf::from(&target_directory_path)
         .canonicalize()
         .map_err(|e| format!("无法访问目标目录: {e}"))?;
 
-    if !canonical_target_dir.starts_with(&projects_root) {
+    #[cfg(target_os = "android")]
+    if (!source_is_guest && !canonical_source.starts_with(&projects_root))
+        || (!target_is_guest && !canonical_target_dir.starts_with(&projects_root))
+    {
         return Err("目标路径不在受信目录内".into());
     }
 
@@ -415,25 +567,33 @@ pub fn move_project_entry(
     source_path: String,
     target_directory_path: String,
 ) -> Result<(), String> {
+    #[cfg(target_os = "android")]
     let projects_root = ensure_projects_dir(&app)?
         .canonicalize()
         .map_err(|e| e.to_string())?;
 
-    let source = PathBuf::from(&source_path);
-    let canonical_source = source
+    #[cfg(target_os = "android")]
+    let (canonical_source, source_is_guest) =
+        resolve_android_path(&app, &source_path, "无法移动源路径")?;
+
+    #[cfg(not(target_os = "android"))]
+    let canonical_source = PathBuf::from(&source_path)
         .canonicalize()
         .map_err(|e| format!("无法移动源路径: {e}"))?;
 
-    if !canonical_source.starts_with(&projects_root) {
-        return Err("源路径不在受信目录内".into());
-    }
+    #[cfg(target_os = "android")]
+    let (canonical_target_dir, target_is_guest) =
+        resolve_android_path(&app, &target_directory_path, "无法访问目标目录")?;
 
-    let target_dir = PathBuf::from(&target_directory_path);
-    let canonical_target_dir = target_dir
+    #[cfg(not(target_os = "android"))]
+    let canonical_target_dir = PathBuf::from(&target_directory_path)
         .canonicalize()
         .map_err(|e| format!("无法访问目标目录: {e}"))?;
 
-    if !canonical_target_dir.starts_with(&projects_root) {
+    #[cfg(target_os = "android")]
+    if (!source_is_guest && !canonical_source.starts_with(&projects_root))
+        || (!target_is_guest && !canonical_target_dir.starts_with(&projects_root))
+    {
         return Err("目标路径不在受信目录内".into());
     }
 
@@ -495,17 +655,32 @@ pub fn resolve_preview_entry(
     app: tauri::AppHandle,
     project_path: String,
 ) -> Result<String, String> {
+    #[allow(unused)]
     let projects_root = ensure_projects_dir(&app)?
         .canonicalize()
         .map_err(|e| e.to_string())?;
 
-    let requested_path = PathBuf::from(project_path);
-    let canonical_requested = requested_path
+    #[cfg(target_os = "android")]
+    let (canonical_requested, is_guest_path) =
+        resolve_android_path(&app, &project_path, "无法访问项目目录")?;
+
+    #[cfg(not(target_os = "android"))]
+    let canonical_requested = PathBuf::from(&project_path)
         .canonicalize()
         .map_err(|e| format!("无法访问项目目录: {e}"))?;
 
-    if !canonical_requested.starts_with(&projects_root) {
-        return Err("项目路径不在受信目录内".into());
+    #[cfg(not(target_os = "android"))]
+    {
+        if !canonical_requested.starts_with(&projects_root) {
+            return Err("项目路径不在受信目录内".into());
+        }
+    }
+
+    #[cfg(target_os = "android")]
+    {
+        if !is_guest_path && !canonical_requested.starts_with(&projects_root) {
+            return Err("项目路径不在受信目录内".into());
+        }
     }
 
     if !canonical_requested.is_dir() {

@@ -18,6 +18,8 @@
     "safe-area-insets-css:default",
     "safe-area-insets-css:allow-get-top-inset",
     "safe-area-insets-css:allow-get-bottom-inset",
+    "safe-area-insets-css:allow-register-listener",
+    "safe-area-insets-css:allow-unregister-listener",
     {
       "identifier": "fs:scope",
       "allow": [

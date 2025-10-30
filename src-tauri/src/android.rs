@@ -537,4 +537,27 @@ pub mod proot {
             tmp_dir,
         })
     }
+
+    pub fn resolve_guest_path(app: &AppHandle, guest_path: &str) -> Result<PathBuf, String> {
+        let env = prepare_proot_env(app)?;
+        let trimmed = guest_path.trim();
+        let mut host_path = env.rootfs_dir.clone();
+
+        if trimmed != "/" {
+            let relative = trimmed.trim_start_matches('/');
+            if !relative.is_empty() {
+                host_path = host_path.join(relative);
+            }
+        }
+
+        let canonical = host_path
+            .canonicalize()
+            .map_err(|e| format!("无法访问 Proot 路径 {guest_path}: {e}"))?;
+
+        if !canonical.starts_with(&env.rootfs_dir) {
+            return Err(format!("Proot 路径 {guest_path} 超出容器根目录"));
+        }
+
+        Ok(canonical)
+    }
 }

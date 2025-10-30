@@ -9,16 +9,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ProjectPreviewExplorer } from "@/components/ProjectPreviewExplorer";
+import { open } from "@tauri-apps/plugin-dialog";
+import { platform } from "@tauri-apps/plugin-os";
 import { Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import HomePage from "@/pages/HomePage";
 import ProjectWorkspace from "@/pages/ProjectWorkspace";
 import PluginsPage from "@/pages/PluginsPage";
+import TerminalPage from "@/pages/TerminalPage";
 import { ProotDownloadProgress } from "@/components/ProotDownloadProgress";
 import type { ProjectEntry } from "@/types/project";
 import { invoke } from "@tauri-apps/api/core";
 import {
-  ChangeEvent,
   useCallback,
   useEffect,
   useMemo,
@@ -27,45 +30,170 @@ import {
 } from "react";
 import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 
-type CreateProjectRequest = {
-  template_id: string;
-  name: string;
-};
-
-type CreateProjectResponse = {
-  project: ProjectEntry;
-};
-
-const projectTemplates = [
-  {
-    id: "basic-web",
-    name: "基础 Web 模板",
-    description: "适用于预览简单 Web 页面的模板。",
-  },
-];
-
 function App() {
+  const RECENT_FOLDERS_KEY = "truidide:recent-folders";
   const [isProjectDialogOpen, setProjectDialogOpen] = useState(false);
   const [projects, setProjects] = useState<ProjectEntry[]>([]);
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [projectsError, setProjectsError] = useState<string | null>(null);
-  const [isCreateDialogOpen, setCreateDialogOpen] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
-  const [isCreatingProject, setIsCreatingProject] = useState(false);
-  const [createProjectError, setCreateProjectError] = useState<string | null>(
-    null,
-  );
-  const [createdProject, setCreatedProject] = useState<ProjectEntry | null>(
-    null,
-  );
-  const [projectName, setProjectName] = useState("基础工程");
   const [projectToOpen, setProjectToOpen] = useState<ProjectEntry | null>(null);
   const [activeProject, setActiveProject] = useState<ProjectEntry | null>(null);
+  const [isAndroid, setIsAndroid] = useState(false);
+  const [projectsRootPath, setProjectsRootPath] = useState<string | null>(null);
+  const [isLoadingProjectsRoot, setIsLoadingProjectsRoot] = useState(false);
+  const [selectedDirectoryPath, setSelectedDirectoryPath] = useState<
+    string | null
+  >(null);
+  const [recentFolders, setRecentFolders] = useState<string[]>([]);
+  const [isRecentMenuOpen, setRecentMenuOpen] = useState(false);
 
   const navigate = useNavigate();
   const handleOpenPlugins = useCallback(() => {
     navigate("/plugins");
   }, [navigate]);
+
+  const recordRecentFolder = useCallback((path: string) => {
+    setRecentFolders((prev) => {
+      const normalized = path.trim();
+      if (!normalized) {
+        return prev;
+      }
+      const next = [normalized, ...prev.filter((item) => item !== normalized)];
+      if (next.length > 50) {
+        next.length = 50;
+      }
+      return next;
+    });
+  }, []);
+
+  const handleExplorerDirectorySelect = useCallback((rawPath: string) => {
+    const trimmed = rawPath.trim();
+    setSelectedDirectoryPath(trimmed.length > 0 ? trimmed : null);
+  }, []);
+
+  const openWorkspaceAtPath = useCallback(
+    (rawPath: string, hint?: ProjectEntry | null) => {
+      if (!rawPath) {
+        return;
+      }
+
+      const normalizedPath = rawPath.trim();
+      if (!normalizedPath) {
+        return;
+      }
+
+      const name =
+        normalizedPath.split(/[/\\]/).filter(Boolean).pop() ?? "项目";
+
+      const entry: ProjectEntry =
+        hint && hint.path === normalizedPath
+          ? hint
+          : {
+              name,
+              path: normalizedPath,
+              last_modified_secs: null,
+            };
+
+      recordRecentFolder(normalizedPath);
+      setActiveProject(entry);
+      setProjectDialogOpen(false);
+      setSelectedDirectoryPath(null);
+      setProjectToOpen(null);
+      navigate("/projects/current");
+    },
+    [navigate, recordRecentFolder],
+  );
+
+  const openFolderWithDialog = useCallback(async () => {
+    try {
+      const selection = await open({
+        directory: true,
+        multiple: false,
+      });
+
+      const selectedPath = Array.isArray(selection) ? selection[0] : selection;
+      if (typeof selectedPath !== "string" || selectedPath.length === 0) {
+        return;
+      }
+
+      openWorkspaceAtPath(selectedPath);
+    } catch {
+      // silently ignore cancellation or errors
+    }
+  }, [openWorkspaceAtPath]);
+
+  const handleOpenFolder = useCallback(() => {
+    if (isAndroid) {
+      setProjectDialogOpen(true);
+      return;
+    }
+
+    setRecentMenuOpen(true);
+  }, [isAndroid]);
+
+  const handleOpenTerminal = useCallback(() => {
+    navigate("/terminal");
+  }, [navigate]);
+
+  const openRecentPath = useCallback(
+    (path: string) => {
+      const trimmed = typeof path === "string" ? path.trim() : "";
+      if (!trimmed) {
+        return;
+      }
+      setRecentMenuOpen(false);
+      recordRecentFolder(trimmed);
+      openWorkspaceAtPath(trimmed);
+    },
+    [openWorkspaceAtPath, recordRecentFolder],
+  );
+
+  useEffect(() => {
+    try {
+      const value = platform();
+      setIsAndroid(value === "android");
+    } catch {
+      setIsAndroid(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const stored = window.localStorage.getItem(RECENT_FOLDERS_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          const sanitized = parsed
+            .map((item) => (typeof item === "string" ? item.trim() : ""))
+            .filter((item) => item.length > 0)
+            .slice(0, 50);
+          if (sanitized.length > 0) {
+            setRecentFolders(sanitized);
+          }
+        }
+      }
+    } catch {
+      // ignore corrupted storage
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      window.localStorage.setItem(
+        RECENT_FOLDERS_KEY,
+        JSON.stringify(recentFolders),
+      );
+    } catch {
+      // ignore persistence errors
+    }
+  }, [recentFolders]);
 
   useEffect(() => {
     if (!isProjectDialogOpen) {
@@ -116,87 +244,91 @@ function App() {
   useEffect(() => {
     if (!isProjectDialogOpen) {
       setProjectToOpen(null);
+      setSelectedDirectoryPath(null);
+      setProjectsRootPath(null);
+      return;
+    }
+
+    if (isAndroid) {
+      setProjectToOpen(null);
       return;
     }
 
     if (!projectToOpen && sortedProjects.length > 0) {
-      setProjectToOpen(sortedProjects[0]);
+      const first = sortedProjects[0];
+      setProjectToOpen(first);
+      void handleExplorerDirectorySelect(first.path);
+      return;
     }
-  }, [isProjectDialogOpen, projectToOpen, sortedProjects]);
+
+    if (
+      projectToOpen &&
+      selectedDirectoryPath !== projectToOpen.path
+    ) {
+      void handleExplorerDirectorySelect(projectToOpen.path);
+    }
+  }, [
+    isAndroid,
+    isProjectDialogOpen,
+    projectToOpen,
+    selectedDirectoryPath,
+    sortedProjects,
+    handleExplorerDirectorySelect,
+  ]);
 
   useEffect(() => {
-    if (!isCreateDialogOpen) {
-      setSelectedTemplate(null);
-      setCreateProjectError(null);
-      setCreatedProject(null);
-      setIsCreatingProject(false);
-      setProjectName("基础工程");
+    if (!isAndroid || !isProjectDialogOpen) {
       return;
     }
 
-    if (!selectedTemplate && projectTemplates.length > 0) {
-      setSelectedTemplate(projectTemplates[0].id);
-    }
-  }, [isCreateDialogOpen, selectedTemplate]);
+    setIsLoadingProjectsRoot(true);
+    invoke<string>("get_projects_root")
+      .then((root) => {
+        setProjectsRootPath(root);
+        void handleExplorerDirectorySelect(root);
+      })
+      .catch(() => {
+        setProjectsRootPath(null);
+        setSelectedDirectoryPath(null);
+      })
+      .finally(() => {
+        setIsLoadingProjectsRoot(false);
+      });
+  }, [handleExplorerDirectorySelect, isAndroid, isProjectDialogOpen]);
+
+  const previewRootPath = isProjectDialogOpen
+    ? isAndroid
+      ? projectsRootPath
+      : projectToOpen?.path ?? null
+    : null;
+  const explorerSelectedPath = isProjectDialogOpen
+    ? selectedDirectoryPath ??
+      (isAndroid ? previewRootPath ?? null : projectToOpen?.path ?? null)
+    : null;
+  const effectiveSelectedPath = isProjectDialogOpen
+    ? selectedDirectoryPath ??
+      (isAndroid ? previewRootPath : projectToOpen?.path ?? null)
+    : null;
+  const isExplorerLoading =
+    isProjectDialogOpen && isAndroid && isLoadingProjectsRoot;
+  const explorerUnavailableText = isAndroid
+    ? "无法加载工作目录，请稍后重试"
+    : "请选择左侧的项目";
+  const shouldShowUnavailable =
+    isProjectDialogOpen && !isExplorerLoading && !previewRootPath;
 
   const handleOpenProject = () => {
-    if (!projectToOpen) {
+    const targetPath = effectiveSelectedPath ?? projectToOpen?.path;
+    if (!targetPath) {
       return;
     }
 
-    setActiveProject(projectToOpen);
-    setProjectDialogOpen(false);
-    navigate("/projects/current");
+    openWorkspaceAtPath(targetPath, projectToOpen);
   };
 
   const handleBackHome = () => {
     setActiveProject(null);
     navigate("/");
-  };
-
-  const handleCreateProject = async () => {
-    if (!selectedTemplate) {
-      setCreateProjectError("请选择一个模板");
-      return;
-    }
-
-    const name = projectName.trim();
-    if (!name) {
-      setCreateProjectError("请输入项目名称");
-      return;
-    }
-
-    setIsCreatingProject(true);
-    setCreateProjectError(null);
-
-    try {
-      const response = await invoke<CreateProjectResponse>("create_project", {
-        request: {
-          template_id: selectedTemplate,
-          name,
-        } satisfies CreateProjectRequest,
-      });
-
-      setCreatedProject(response.project);
-      setProjects((prev) => {
-        const withoutCurrent = prev.filter(
-          (item) => item.path !== response.project.path,
-        );
-        return [response.project, ...withoutCurrent];
-      });
-      setProjectName(response.project.name);
-      setProjectToOpen(response.project);
-    } catch (error) {
-      const message =
-        typeof error === "string"
-          ? error
-          : error instanceof Error
-            ? error.message
-            : "创建项目失败";
-      setCreateProjectError(message);
-    } finally {
-      setIsCreatingProject(false);
-    }
   };
 
   // Project action dialog (long-press / context menu) state
@@ -409,13 +541,14 @@ function App() {
           path="/"
           element={
             <HomePage
-              onOpenProjectDialog={() => setProjectDialogOpen(true)}
-              onOpenCreateDialog={() => setCreateDialogOpen(true)}
+              onOpenFolder={handleOpenFolder}
+              onOpenTerminal={handleOpenTerminal}
               onOpenPlugins={handleOpenPlugins}
             />
           }
         />
         <Route path="/plugins" element={<PluginsPage />} />
+        <Route path="/terminal" element={<TerminalPage />} />
         <Route
           path="/projects/current"
           element={
@@ -433,87 +566,197 @@ function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
-      <Dialog open={isProjectDialogOpen} onOpenChange={setProjectDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>打开项目</DialogTitle>
-            <DialogDescription>
-              从应用的私有目录中选择一个项目继续工作。
-            </DialogDescription>
-          </DialogHeader>
-          <section className="space-y-3">
-            {isLoadingProjects ? (
-              <p className="text-sm text-muted-foreground">正在加载项目列表…</p>
-            ) : projectsError ? (
-              <p className="text-sm text-destructive">{projectsError}</p>
-            ) : sortedProjects.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                暂无项目。您可以稍后从文件系统导入或创建新的安卓工程。
+      <Dialog open={isRecentMenuOpen} onOpenChange={setRecentMenuOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <div className="max-h-60 overflow-y-auto pr-1">
+            <div className="sticky top-0 z-10 bg-background pb-2">
+              <Button
+                className="w-full"
+                onClick={() => {
+                  setRecentMenuOpen(false);
+                  void openFolderWithDialog();
+                }}
+              >
+                打开文件夹
+              </Button>
+            </div>
+            {recentFolders.length === 0 ? (
+              <p className="px-1 py-3 text-sm text-muted-foreground">
+                暂无最近打开的目录
               </p>
             ) : (
-              <ul className="space-y-2">
-                {sortedProjects.map((project) => {
-                  const isSelected = projectToOpen?.path === project.path;
+              <div className="flex flex-col gap-2 pb-2">
+                {recentFolders.map((folder) => {
+                  const name = folder.split(/[/\\]/).filter(Boolean).pop() ?? folder;
                   return (
-                    <li key={project.path}>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          // prevent click immediately after long-press
-                          if (projectLongPressTriggeredRef.current) {
-                            projectLongPressTriggeredRef.current = false;
-                            e.preventDefault();
-                            e.stopPropagation();
-                            return;
-                          }
-                          setProjectToOpen(project);
-                        }}
-                        onPointerDown={(e) =>
-                          handleProjectPointerDown(e as any, project)
-                        }
-                        onPointerUp={(e) => handleProjectPointerUp(e as any)}
-                        onContextMenu={(e) =>
-                          handleProjectContextMenu(e as any, project)
-                        }
-                        className={cn(
-                          "w-full rounded-lg border bg-card p-4 text-left text-card-foreground transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                          isSelected
-                            ? "border-primary bg-primary/5 shadow"
-                            : "hover:border-primary hover:shadow",
-                        )}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="text-sm font-medium">
-                            {project.name}
-                          </div>
-                          {isSelected ? (
-                            <span className="text-xs text-primary">已选择</span>
-                          ) : null}
-                        </div>
-                        <div className="mt-1 break-all text-xs text-muted-foreground">
-                          {project.path}
-                        </div>
-                        {project.last_modified_secs ? (
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            最近修改：
-                            {new Date(
-                              project.last_modified_secs * 1000,
-                            ).toLocaleString()}
-                          </div>
-                        ) : null}
-                      </button>
-                    </li>
+                    <button
+                      type="button"
+                      key={folder}
+                      onClick={() => openRecentPath(folder)}
+                      className="w-full rounded-md border bg-card p-3 text-left text-sm transition hover:border-primary hover:shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <div className="font-medium text-foreground">{name}</div>
+                      <div className="mt-1 break-all text-xs text-muted-foreground">{folder}</div>
+                    </button>
                   );
                 })}
-              </ul>
+              </div>
             )}
-          </section>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isProjectDialogOpen} onOpenChange={setProjectDialogOpen}>
+        <DialogContent className="md:max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>打开文件夹</DialogTitle>
+            <DialogDescription>
+              选择一个项目文件夹并在右侧预览其结构，然后开始开发。
+            </DialogDescription>
+          </DialogHeader>
+          <div
+            className={cn(
+              "grid gap-6",
+              !isAndroid && "md:grid-cols-[minmax(0,280px)_1fr]",
+            )}
+          >
+            {!isAndroid ? (
+              <section className="flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-muted-foreground">
+                  最近项目
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={refreshProjects}
+                  disabled={isLoadingProjects}
+                >
+                  刷新
+                </Button>
+              </div>
+              {isLoadingProjects ? (
+                <p className="text-sm text-muted-foreground">
+                  正在加载项目列表…
+                </p>
+              ) : projectsError ? (
+                <p className="text-sm text-destructive">{projectsError}</p>
+              ) : sortedProjects.length === 0 ? (
+                <p className="rounded-lg border border-dashed bg-muted/20 p-4 text-sm text-muted-foreground">
+                  暂未检测到项目文件夹。可以先在终端中创建或导入项目，随后返回此处打开。
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {sortedProjects.map((project) => {
+                    const isSelected = projectToOpen?.path === project.path;
+                    return (
+                      <li key={project.path}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                    if (projectLongPressTriggeredRef.current) {
+                      projectLongPressTriggeredRef.current = false;
+                      e.preventDefault();
+                      e.stopPropagation();
+                      return;
+                    }
+                    setProjectToOpen(project);
+                    void handleExplorerDirectorySelect(project.path);
+                  }}
+                          onPointerDown={(e) =>
+                            handleProjectPointerDown(e as any, project)
+                          }
+                          onPointerUp={(e) => handleProjectPointerUp(e as any)}
+                          onContextMenu={(e) =>
+                            handleProjectContextMenu(e as any, project)
+                          }
+                          className={cn(
+                            "w-full rounded-lg border bg-card p-4 text-left text-card-foreground transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            isSelected
+                              ? "border-primary bg-primary/5 shadow"
+                              : "hover:border-primary hover:shadow",
+                          )}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="text-sm font-medium">
+                              {project.name}
+                            </div>
+                            {isSelected ? (
+                              <span className="text-xs text-primary">
+                                已选择
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="mt-1 break-all text-xs text-muted-foreground">
+                            {project.path}
+                          </div>
+                          {project.last_modified_secs ? (
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              最近修改：
+                              {new Date(
+                                project.last_modified_secs * 1000,
+                              ).toLocaleString()}
+                            </div>
+                          ) : null}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              </section>
+            ) : null}
+            <section className="flex flex-col gap-3">
+              {isExplorerLoading ? (
+                <div className="flex h-72 items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground">
+                  正在加载工作目录…
+                </div>
+              ) : previewRootPath ? (
+                <ProjectPreviewExplorer
+                  projectPath={previewRootPath}
+                  selectedDirectoryPath={
+                    explorerSelectedPath ?? previewRootPath
+                  }
+                  onSelectDirectory={(path) =>
+                    void handleExplorerDirectorySelect(path)
+                  }
+                />
+              ) : shouldShowUnavailable ? (
+                <div
+                  className={cn(
+                    "flex h-72 items-center justify-center rounded-xl px-4 text-sm",
+                    isAndroid
+                      ? "border border-destructive/40 bg-destructive/10 text-destructive"
+                      : "border border-dashed text-muted-foreground",
+                  )}
+                >
+                  {explorerUnavailableText}
+                </div>
+              ) : null}
+              {isProjectDialogOpen ? (
+                <div className="rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">将打开：</span>
+                  <span className="ml-1 break-all">
+                    {explorerSelectedPath ?? previewRootPath ?? "未选择任何目录"}
+                  </span>
+                </div>
+              ) : null}
+            </section>
+          </div>
           <DialogFooter>
             <DialogClose asChild>
               <Button variant="secondary">取消</Button>
             </DialogClose>
-            <Button onClick={handleOpenProject} disabled={!projectToOpen}>
-              打开项目
+            <Button
+              onClick={handleOpenProject}
+              disabled={
+                !effectiveSelectedPath ||
+                isLoadingProjects ||
+                (isAndroid && (isExplorerLoading || !previewRootPath))
+              }
+            >
+              打开文件夹
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -623,106 +866,6 @@ function App() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isCreateDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>创建项目</DialogTitle>
-            <DialogDescription>选择一个模板以快速开始。</DialogDescription>
-          </DialogHeader>
-          {createdProject ? (
-            <section className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                项目已创建：您可以返回主页在“打开”列表中找到它。
-              </p>
-              <article className="rounded-lg border bg-card p-4 text-card-foreground">
-                <h3 className="text-base font-semibold">
-                  {createdProject.name}
-                </h3>
-                <p className="mt-1 break-all text-xs text-muted-foreground">
-                  {createdProject.path}
-                </p>
-                {createdProject.last_modified_secs ? (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    创建时间：
-                    {new Date(
-                      createdProject.last_modified_secs * 1000,
-                    ).toLocaleString()}
-                  </p>
-                ) : null}
-              </article>
-            </section>
-          ) : (
-            <>
-              <section className="grid gap-4 sm:grid-cols-2">
-                {projectTemplates.map((template) => {
-                  const isSelected = selectedTemplate === template.id;
-                  return (
-                    <button
-                      key={template.id}
-                      type="button"
-                      onClick={() => setSelectedTemplate(template.id)}
-                      className={cn(
-                        "flex h-full flex-col justify-between rounded-lg border bg-card p-4 text-left text-card-foreground shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                        isSelected
-                          ? "border-primary ring-2 ring-primary"
-                          : "hover:border-primary hover:shadow",
-                      )}
-                    >
-                      <div className="space-y-2">
-                        <h3 className="text-base font-semibold">
-                          {template.name}
-                        </h3>
-                        <p className="text-sm text-muted-foreground">
-                          {template.description}
-                        </p>
-                      </div>
-                      <div className="mt-4 flex justify-between text-xs text-muted-foreground">
-                        <span>{isSelected ? "已选择" : "点击选择"}</span>
-                        <span>模板 ID：{template.id}</span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </section>
-              <div className="mt-4 space-y-2">
-                <label className="text-sm font-medium" htmlFor="project-name">
-                  项目名称
-                </label>
-                <Input
-                  id="project-name"
-                  value={projectName}
-                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                    setProjectName(event.target.value)
-                  }
-                  placeholder="请输入项目名称"
-                />
-              </div>
-              {createProjectError ? (
-                <p className="text-sm text-destructive">{createProjectError}</p>
-              ) : null}
-            </>
-          )}
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="secondary">
-                {createdProject ? "关闭" : "取消"}
-              </Button>
-            </DialogClose>
-            {!createdProject ? (
-              <Button
-                onClick={handleCreateProject}
-                disabled={
-                  isCreatingProject ||
-                  !selectedTemplate ||
-                  projectName.trim().length === 0
-                }
-              >
-                {isCreatingProject ? "正在创建…" : "开始创建"}
-              </Button>
-            ) : null}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

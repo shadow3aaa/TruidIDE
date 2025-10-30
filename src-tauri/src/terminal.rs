@@ -166,13 +166,10 @@ fn start_proot_session_internal(
 
     cmd.arg(format!("--rootfs={}", rootfs_dir.to_string_lossy()));
 
-    if let Some(ref wd) = cwd_in_rootfs {
-        let guest_path = PathBuf::from("/mnt/workspace");
-        let full_guest_path = rootfs_dir.join(guest_path.strip_prefix("/").unwrap());
-        let _ = fs::create_dir_all(&full_guest_path);
-        cmd.arg(format!("--bind={}:{}", wd, guest_path.to_string_lossy()));
-        cmd.arg(format!("--cwd={}", guest_path.to_string_lossy()));
-    }
+    let effective_cwd = cwd_in_rootfs
+        .filter(|cwd| !cwd.trim().is_empty())
+        .unwrap_or_else(|| String::from("/root"));
+    cmd.arg(format!("--cwd={effective_cwd}"));
 
     cmd.args(&[
         "--root-id",
@@ -225,7 +222,7 @@ fn start_proot_session_internal(
                 .lock()
                 .map_err(|e| format!("锁错误: {e}"))?;
             let mut state = SessionState::default();
-            state.cwd = cwd_in_rootfs.clone().unwrap_or_else(|| String::from("/"));
+            state.cwd = effective_cwd.clone();
             ss.insert(session_id.clone(), state);
         }
 
@@ -279,12 +276,12 @@ fn start_proot_session_internal(
     }
 
     // register mapping from provided cwd_in_rootfs (if any) -> session id
-    if let Some(ref wd) = cwd_in_rootfs {
+    {
         let mut by_cwd = sessions_by_cwd_map()
             .lock()
             .map_err(|e| format!("锁错误: {e}"))?;
         by_cwd
-            .entry(wd.to_string())
+            .entry(effective_cwd.clone())
             .or_default()
             .push(session_id.clone());
     }
@@ -300,7 +297,22 @@ pub fn start_terminal_session(
     let cwd = args.cwd.clone();
     #[cfg(target_os = "android")]
     {
-        match start_proot_session_internal(app.clone(), Some(cwd.clone())) {
+        let desired = {
+            let trimmed = cwd.trim();
+            if trimmed.is_empty() {
+                "/root".to_string()
+            } else if trimmed.starts_with('/') {
+                let path = trimmed.to_string();
+                if crate::android::proot::resolve_guest_path(&app, &path).is_ok() {
+                    path
+                } else {
+                    "/root".to_string()
+                }
+            } else {
+                "/root".to_string()
+            }
+        };
+        match start_proot_session_internal(app.clone(), Some(desired)) {
             Ok(sid) => return Ok(sid),
             Err(e) => return Err(format!("proot 启动失败: {e}")),
         }

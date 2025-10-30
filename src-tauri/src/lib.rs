@@ -48,6 +48,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            projects::get_projects_root,
             projects::list_projects,
             projects::list_project_tree,
             projects::read_project_file,

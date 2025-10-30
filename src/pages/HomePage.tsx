@@ -4,8 +4,8 @@ import Lottie from "lottie-react";
 import catAnimation from "@/assets/cat.json";
 
 type HomePageProps = {
-  onOpenProjectDialog: () => void;
-  onOpenCreateDialog: () => void;
+  onOpenFolder: () => void;
+  onOpenTerminal: () => void;
   onOpenPlugins: () => void;
 };
 
@@ -16,8 +16,8 @@ const secondaryActions = [
 ];
 
 function HomePage({
-  onOpenProjectDialog,
-  onOpenCreateDialog,
+  onOpenFolder,
+  onOpenTerminal,
   onOpenPlugins,
 }: HomePageProps) {
   const { isDownloading, isReady } = useDownloadStatus();
@@ -44,17 +44,17 @@ function HomePage({
         <nav className="flex flex-col gap-3">
           <Button
             className="w-full py-6 text-base"
-            onClick={onOpenProjectDialog}
+            onClick={onOpenFolder}
             disabled={isDisabled}
           >
             打开
           </Button>
           <Button
             className="w-full py-6 text-base"
-            onClick={onOpenCreateDialog}
+            onClick={onOpenTerminal}
             disabled={isDisabled}
           >
-            创建
+            终端
           </Button>
           {secondaryActions.map((action) => (
             <Button

@@ -202,13 +202,47 @@ impl PluginHost {
             .or_else(|| manifest.language_ids.first().cloned())
             .ok_or_else(|| "插件未声明语言标识".to_string())?;
 
-        let workspace_path = PathBuf::from(&args.workspace_path);
-        if !workspace_path.exists() {
-            return Err(format!(
-                "工作区路径不存在: {}",
-                workspace_path.to_string_lossy()
-            ));
-        }
+        let workspace_path = {
+            let raw = args.workspace_path.trim();
+            if raw.is_empty() {
+                return Err("工作区路径不能为空".into());
+            }
+
+            #[cfg(target_os = "android")]
+            {
+                let candidate = if raw.starts_with('/') {
+                    match crate::android::proot::resolve_guest_path(&self.inner.app, raw) {
+                        Ok(path) => path,
+                        Err(_) => PathBuf::from(raw),
+                    }
+                } else {
+                    PathBuf::from(raw)
+                };
+
+                if !candidate.exists() {
+                    return Err(format!(
+                        "工作区路径不存在: {}",
+                        candidate.to_string_lossy()
+                    ));
+                }
+
+                candidate
+                    .canonicalize()
+                    .unwrap_or(candidate)
+            }
+
+            #[cfg(not(target_os = "android"))]
+            {
+                let candidate = PathBuf::from(raw);
+                if !candidate.exists() {
+                    return Err(format!(
+                        "工作区路径不存在: {}",
+                        candidate.to_string_lossy()
+                    ));
+                }
+                candidate.canonicalize().unwrap_or(candidate)
+            }
+        };
 
         let initialization_options = args
             .initialization_options

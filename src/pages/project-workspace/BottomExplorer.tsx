@@ -62,6 +62,7 @@ type Props = {
   fileTreeError: string | null;
   insertTextAtCursor?: (text: string) => void;
   projectPath: string;
+  terminalCwd?: string;
   pluginLogs: PluginLogEntry[];
   onClearPluginLogs: () => void;
 };
@@ -655,7 +656,9 @@ export function BottomExplorer(props: Props) {
                 <React.Suspense
                   fallback={<div className="p-4">正在加载终端…</div>}
                 >
-                  <TerminalTabLazy projectPath={props.projectPath} />
+                  <TerminalTabLazy
+                    projectPath={props.terminalCwd ?? props.projectPath}
+                  />
                 </React.Suspense>
               </div>
             ) : (

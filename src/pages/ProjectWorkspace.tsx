@@ -107,6 +107,7 @@ function ProjectWorkspace({
     () => normalizeForCompare(projectPath),
     [projectPath],
   );
+  const [terminalCwd, setTerminalCwd] = useState(projectPath);
 
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [isExplorerOpen, setExplorerOpen] = useState(false);
@@ -165,6 +166,9 @@ function ProjectWorkspace({
   const clearPluginLogs = useCallback(() => {
     setPluginLogs([]);
   }, []);
+  useEffect(() => {
+    setTerminalCwd(projectPath);
+  }, [projectPath]);
   const isMountedRef = useRef(true);
   const detectLanguageId = useCallback((filePath: string) => {
     const lower = filePath.toLowerCase();
@@ -1932,6 +1936,7 @@ function ProjectWorkspace({
           fileTreeError={fileTreeError}
           insertTextAtCursor={insertTextAtCursor}
           projectPath={projectPath}
+          terminalCwd={terminalCwd}
           pluginLogs={pluginLogs}
           onClearPluginLogs={clearPluginLogs}
         />
