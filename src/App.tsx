@@ -21,13 +21,7 @@ import TerminalPage from "@/pages/TerminalPage";
 import { ProotDownloadProgress } from "@/components/ProotDownloadProgress";
 import type { ProjectEntry } from "@/types/project";
 import { invoke } from "@tauri-apps/api/core";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 
 function App() {
@@ -261,10 +255,7 @@ function App() {
       return;
     }
 
-    if (
-      projectToOpen &&
-      selectedDirectoryPath !== projectToOpen.path
-    ) {
+    if (projectToOpen && selectedDirectoryPath !== projectToOpen.path) {
       void handleExplorerDirectorySelect(projectToOpen.path);
     }
   }, [
@@ -299,15 +290,15 @@ function App() {
   const previewRootPath = isProjectDialogOpen
     ? isAndroid
       ? projectsRootPath
-      : projectToOpen?.path ?? null
+      : (projectToOpen?.path ?? null)
     : null;
   const explorerSelectedPath = isProjectDialogOpen
-    ? selectedDirectoryPath ??
-      (isAndroid ? previewRootPath ?? null : projectToOpen?.path ?? null)
+    ? (selectedDirectoryPath ??
+      (isAndroid ? (previewRootPath ?? null) : (projectToOpen?.path ?? null)))
     : null;
   const effectiveSelectedPath = isProjectDialogOpen
-    ? selectedDirectoryPath ??
-      (isAndroid ? previewRootPath : projectToOpen?.path ?? null)
+    ? (selectedDirectoryPath ??
+      (isAndroid ? previewRootPath : (projectToOpen?.path ?? null)))
     : null;
   const isExplorerLoading =
     isProjectDialogOpen && isAndroid && isLoadingProjectsRoot;
@@ -587,7 +578,8 @@ function App() {
             ) : (
               <div className="flex flex-col gap-2 pb-2">
                 {recentFolders.map((folder) => {
-                  const name = folder.split(/[/\\]/).filter(Boolean).pop() ?? folder;
+                  const name =
+                    folder.split(/[/\\]/).filter(Boolean).pop() ?? folder;
                   return (
                     <button
                       type="button"
@@ -596,7 +588,9 @@ function App() {
                       className="w-full rounded-md border bg-card p-3 text-left text-sm transition hover:border-primary hover:shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <div className="font-medium text-foreground">{name}</div>
-                      <div className="mt-1 break-all text-xs text-muted-foreground">{folder}</div>
+                      <div className="mt-1 break-all text-xs text-muted-foreground">
+                        {folder}
+                      </div>
                     </button>
                   );
                 })}
@@ -622,89 +616,91 @@ function App() {
           >
             {!isAndroid ? (
               <section className="flex flex-col gap-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-muted-foreground">
-                  最近项目
-                </span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={refreshProjects}
-                  disabled={isLoadingProjects}
-                >
-                  刷新
-                </Button>
-              </div>
-              {isLoadingProjects ? (
-                <p className="text-sm text-muted-foreground">
-                  正在加载项目列表…
-                </p>
-              ) : projectsError ? (
-                <p className="text-sm text-destructive">{projectsError}</p>
-              ) : sortedProjects.length === 0 ? (
-                <p className="rounded-lg border border-dashed bg-muted/20 p-4 text-sm text-muted-foreground">
-                  暂未检测到项目文件夹。可以先在终端中创建或导入项目，随后返回此处打开。
-                </p>
-              ) : (
-                <ul className="space-y-2">
-                  {sortedProjects.map((project) => {
-                    const isSelected = projectToOpen?.path === project.path;
-                    return (
-                      <li key={project.path}>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                    if (projectLongPressTriggeredRef.current) {
-                      projectLongPressTriggeredRef.current = false;
-                      e.preventDefault();
-                      e.stopPropagation();
-                      return;
-                    }
-                    setProjectToOpen(project);
-                    void handleExplorerDirectorySelect(project.path);
-                  }}
-                          onPointerDown={(e) =>
-                            handleProjectPointerDown(e as any, project)
-                          }
-                          onPointerUp={(e) => handleProjectPointerUp(e as any)}
-                          onContextMenu={(e) =>
-                            handleProjectContextMenu(e as any, project)
-                          }
-                          className={cn(
-                            "w-full rounded-lg border bg-card p-4 text-left text-card-foreground transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                            isSelected
-                              ? "border-primary bg-primary/5 shadow"
-                              : "hover:border-primary hover:shadow",
-                          )}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="text-sm font-medium">
-                              {project.name}
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-muted-foreground">
+                    最近项目
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={refreshProjects}
+                    disabled={isLoadingProjects}
+                  >
+                    刷新
+                  </Button>
+                </div>
+                {isLoadingProjects ? (
+                  <p className="text-sm text-muted-foreground">
+                    正在加载项目列表…
+                  </p>
+                ) : projectsError ? (
+                  <p className="text-sm text-destructive">{projectsError}</p>
+                ) : sortedProjects.length === 0 ? (
+                  <p className="rounded-lg border border-dashed bg-muted/20 p-4 text-sm text-muted-foreground">
+                    暂未检测到项目文件夹。可以先在终端中创建或导入项目，随后返回此处打开。
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {sortedProjects.map((project) => {
+                      const isSelected = projectToOpen?.path === project.path;
+                      return (
+                        <li key={project.path}>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              if (projectLongPressTriggeredRef.current) {
+                                projectLongPressTriggeredRef.current = false;
+                                e.preventDefault();
+                                e.stopPropagation();
+                                return;
+                              }
+                              setProjectToOpen(project);
+                              void handleExplorerDirectorySelect(project.path);
+                            }}
+                            onPointerDown={(e) =>
+                              handleProjectPointerDown(e as any, project)
+                            }
+                            onPointerUp={(e) =>
+                              handleProjectPointerUp(e as any)
+                            }
+                            onContextMenu={(e) =>
+                              handleProjectContextMenu(e as any, project)
+                            }
+                            className={cn(
+                              "w-full rounded-lg border bg-card p-4 text-left text-card-foreground transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                              isSelected
+                                ? "border-primary bg-primary/5 shadow"
+                                : "hover:border-primary hover:shadow",
+                            )}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="text-sm font-medium">
+                                {project.name}
+                              </div>
+                              {isSelected ? (
+                                <span className="text-xs text-primary">
+                                  已选择
+                                </span>
+                              ) : null}
                             </div>
-                            {isSelected ? (
-                              <span className="text-xs text-primary">
-                                已选择
-                              </span>
+                            <div className="mt-1 break-all text-xs text-muted-foreground">
+                              {project.path}
+                            </div>
+                            {project.last_modified_secs ? (
+                              <div className="mt-1 text-xs text-muted-foreground">
+                                最近修改：
+                                {new Date(
+                                  project.last_modified_secs * 1000,
+                                ).toLocaleString()}
+                              </div>
                             ) : null}
-                          </div>
-                          <div className="mt-1 break-all text-xs text-muted-foreground">
-                            {project.path}
-                          </div>
-                          {project.last_modified_secs ? (
-                            <div className="mt-1 text-xs text-muted-foreground">
-                              最近修改：
-                              {new Date(
-                                project.last_modified_secs * 1000,
-                              ).toLocaleString()}
-                            </div>
-                          ) : null}
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
               </section>
             ) : null}
             <section className="flex flex-col gap-3">
@@ -738,7 +734,9 @@ function App() {
                 <div className="rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
                   <span className="font-medium text-foreground">将打开：</span>
                   <span className="ml-1 break-all">
-                    {explorerSelectedPath ?? previewRootPath ?? "未选择任何目录"}
+                    {explorerSelectedPath ??
+                      previewRootPath ??
+                      "未选择任何目录"}
                   </span>
                 </div>
               ) : null}
@@ -865,7 +863,6 @@ function App() {
           ) : null}
         </DialogContent>
       </Dialog>
-
     </div>
   );
 }

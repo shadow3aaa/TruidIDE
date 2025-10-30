@@ -12,6 +12,8 @@ type Props = {
 };
 
 const DEFAULT_TITLE = "终端";
+const MIN_FONT_SIZE = 8;
+const MAX_FONT_SIZE = 32;
 
 type SessionInfo = {
   sessionId: string;
@@ -45,6 +47,24 @@ export default function TerminalTab({ projectPath }: Props) {
   const suppressNextDataRef = useRef(false);
   const menuContainerRef = useRef<HTMLDivElement | null>(null);
   const isMountedRef = useRef(true);
+  const [fontSize, setFontSize] = useState(13);
+  const touchStateRef = useRef({
+    initialDistance: 0,
+    initialFontSize: fontSize,
+  });
+  const adjustFontSize = useCallback(
+    (next: number | ((prev: number) => number)) => {
+      setFontSize((prev) => {
+        const target =
+          typeof next === "function"
+            ? (next as (prev: number) => number)(prev)
+            : next;
+        const normalized = Number.isFinite(target) ? Math.round(target) : prev;
+        return Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, normalized));
+      });
+    },
+    [],
+  );
 
   useEffect(() => {
     ctrlLockedRef.current = isCtrlLocked;
@@ -62,12 +82,111 @@ export default function TerminalTab({ projectPath }: Props) {
   }, []);
 
   useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey)) return;
+      if (event.key === "=" || event.key === "+") {
+        event.preventDefault();
+        adjustFontSize((prev) => prev + 1);
+        termRef.current?.focus();
+      } else if (event.key === "-" || event.key === "_") {
+        event.preventDefault();
+        adjustFontSize((prev) => prev - 1);
+        termRef.current?.focus();
+      } else if (event.key === "0") {
+        event.preventDefault();
+        adjustFontSize(13);
+        termRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [adjustFontSize]);
+
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+    if (term.options.fontSize !== fontSize) {
+      term.options.fontSize = fontSize;
+      term.refresh(0, Math.max(0, term.rows - 1));
+    }
+    fitRef.current?.fit();
+    const sessionId = sessionIdRef.current;
+    if (sessionId && term.cols && term.rows) {
+      invoke("resize_terminal", {
+        args: { sessionId, cols: term.cols, rows: term.rows },
+      }).catch(() => {});
+    }
+  }, [fontSize]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleWheel = (event: WheelEvent) => {
+      if (!(event.ctrlKey || event.metaKey)) return;
+      event.preventDefault();
+      const delta = event.deltaY > 0 ? -1 : 1;
+      adjustFontSize((prev) => prev + delta);
+      termRef.current?.focus();
+    };
+
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      container.removeEventListener("wheel", handleWheel);
+    };
+  }, [adjustFontSize]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 2) return;
+      event.preventDefault();
+      const [touch1, touch2] = [event.touches[0], event.touches[1]];
+      const distance = Math.hypot(
+        touch2.clientX - touch1.clientX,
+        touch2.clientY - touch1.clientY,
+      );
+      touchStateRef.current.initialDistance = distance;
+      touchStateRef.current.initialFontSize = fontSize;
+    };
+
+    const handleTouchMove = (event: TouchEvent) => {
+      if (event.touches.length !== 2) return;
+      event.preventDefault();
+      const [touch1, touch2] = [event.touches[0], event.touches[1]];
+      const distance = Math.hypot(
+        touch2.clientX - touch1.clientX,
+        touch2.clientY - touch1.clientY,
+      );
+      const { initialDistance, initialFontSize } = touchStateRef.current;
+      if (!initialDistance) return;
+      const scale = distance / initialDistance;
+      const target = initialFontSize * scale;
+      adjustFontSize(target);
+      termRef.current?.focus();
+    };
+
+    container.addEventListener("touchstart", handleTouchStart, {
+      passive: false,
+    });
+    container.addEventListener("touchmove", handleTouchMove, {
+      passive: false,
+    });
+    return () => {
+      container.removeEventListener("touchstart", handleTouchStart);
+      container.removeEventListener("touchmove", handleTouchMove);
+    };
+  }, [adjustFontSize, fontSize]);
+
+  useEffect(() => {
     // Create terminal
     const term = new Terminal({
       cursorBlink: true,
       fontFamily:
         'MapleMonoNF, ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace',
-      fontSize: 13,
+      fontSize,
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
@@ -96,7 +215,7 @@ export default function TerminalTab({ projectPath }: Props) {
       }
       const activeSid = sessionIdRef.current;
       if (!activeSid) return;
-      
+
       let payload = data;
       const ctrlLocked = ctrlLockedRef.current;
       const altLocked = altLockedRef.current;
@@ -133,7 +252,7 @@ export default function TerminalTab({ projectPath }: Props) {
     const keyDisposable = term.onKey(({ domEvent }) => {
       const activeSid = sessionIdRef.current;
       if (!activeSid) return;
-      
+
       const k = domEvent.key;
       // Only handle single-character printable keys
       if (
@@ -231,7 +350,11 @@ export default function TerminalTab({ projectPath }: Props) {
       const activeSessionId = sessionIdRef.current;
       if (activeSessionId && term.cols && term.rows) {
         invoke("resize_terminal", {
-          args: { sessionId: activeSessionId, cols: term.cols, rows: term.rows },
+          args: {
+            sessionId: activeSessionId,
+            cols: term.cols,
+            rows: term.rows,
+          },
         }).catch(() => {});
       }
     };
@@ -311,15 +434,17 @@ export default function TerminalTab({ projectPath }: Props) {
   const detachCurrentSession = useCallback(async () => {
     const current = sessionIdRef.current;
     if (!current) return;
-    
+
     if (unlistenRef.current) {
       unlistenRef.current();
       unlistenRef.current = null;
     }
     sessionIdRef.current = null;
     lastSeqRef.current = 0;
-    
-    await invoke("detach_terminal_session", { args: { sessionId: current } }).catch(() => {});
+
+    await invoke("detach_terminal_session", {
+      args: { sessionId: current },
+    }).catch(() => {});
   }, []);
 
   const attachToSession = useCallback(
@@ -344,7 +469,8 @@ export default function TerminalTab({ projectPath }: Props) {
         const payload = event.payload;
         if (!payload) return;
         const seq = typeof payload.seq === "number" ? payload.seq : NaN;
-        const data = typeof payload.data === "string" ? payload.data : String(payload);
+        const data =
+          typeof payload.data === "string" ? payload.data : String(payload);
         if (!Number.isNaN(seq) && seq > lastSeqRef.current) {
           term.write(data);
           lastSeqRef.current = seq;
@@ -366,8 +492,11 @@ export default function TerminalTab({ projectPath }: Props) {
         "attach_terminal_session",
         { args: { sessionId } },
       );
-      
-      if (attachTokenRef.current === token && sessionIdRef.current === sessionId) {
+
+      if (
+        attachTokenRef.current === token &&
+        sessionIdRef.current === sessionId
+      ) {
         term.reset();
         for (const item of snapshot) {
           if (typeof item.seq === "number" && item.seq > lastSeqRef.current) {
@@ -377,7 +506,10 @@ export default function TerminalTab({ projectPath }: Props) {
         }
       }
 
-      if (attachTokenRef.current !== token || sessionIdRef.current !== sessionId) {
+      if (
+        attachTokenRef.current !== token ||
+        sessionIdRef.current !== sessionId
+      ) {
         return;
       }
 

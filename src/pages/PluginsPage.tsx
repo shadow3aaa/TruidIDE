@@ -259,13 +259,13 @@ function PluginsPage() {
       </header>
 
       <div className="flex items-center gap-3">
-          <Button type="button" variant="outline" onClick={handleBack}>
-            返回
-          </Button>
-          <Button type="button" onClick={handleImport} disabled={isImporting}>
-            {isImporting ? "导入中…" : "导入插件"}
-          </Button>
-        </div>
+        <Button type="button" variant="outline" onClick={handleBack}>
+          返回
+        </Button>
+        <Button type="button" onClick={handleImport} disabled={isImporting}>
+          {isImporting ? "导入中…" : "导入插件"}
+        </Button>
+      </div>
 
       {status === "loading" && (
         <p className="text-sm text-muted-foreground">正在加载可用插件…</p>

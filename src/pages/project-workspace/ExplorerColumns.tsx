@@ -201,10 +201,10 @@ export function ExplorerColumns({
                             onContextMenu={(event) =>
                               onEntryContextMenu(event, columnId, node)
                             }
-                          className={cn(
-                            "group relative w-full flex items-start justify-between gap-3 py-3 px-6 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                            isActiveFile ? "text-primary" : "text-foreground",
-                          )}
+                            className={cn(
+                              "group relative w-full flex items-start justify-between gap-3 py-3 px-6 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                              isActiveFile ? "text-primary" : "text-foreground",
+                            )}
                           >
                             <span className="flex flex-1 items-start gap-3 relative z-10">
                               {node.type === "folder" ? (

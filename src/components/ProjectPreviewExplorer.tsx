@@ -29,12 +29,12 @@ export function ProjectPreviewExplorer({
   const [fileTree, setFileTree] = useState<FileNode[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [columnViews, setColumnViews] = useState<
-    Record<ColumnId, ColumnState>
-  >(() => ({
-    left: createColumnState(projectPath),
-    right: createColumnState(projectPath),
-  }));
+  const [columnViews, setColumnViews] = useState<Record<ColumnId, ColumnState>>(
+    () => ({
+      left: createColumnState(projectPath),
+      right: createColumnState(projectPath),
+    }),
+  );
   const [activeColumn, setActiveColumn] = useState<ColumnId>("left");
   const lastSelectedRef = useRef<string | null>(null);
 

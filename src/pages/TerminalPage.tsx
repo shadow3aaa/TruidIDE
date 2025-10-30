@@ -160,7 +160,6 @@ function TerminalPage() {
             插件
           </Button>
         </nav>
-
       </aside>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">

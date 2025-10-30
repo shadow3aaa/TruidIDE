@@ -220,25 +220,17 @@ impl PluginHost {
                 };
 
                 if !candidate.exists() {
-                    return Err(format!(
-                        "工作区路径不存在: {}",
-                        candidate.to_string_lossy()
-                    ));
+                    return Err(format!("工作区路径不存在: {}", candidate.to_string_lossy()));
                 }
 
-                candidate
-                    .canonicalize()
-                    .unwrap_or(candidate)
+                candidate.canonicalize().unwrap_or(candidate)
             }
 
             #[cfg(not(target_os = "android"))]
             {
                 let candidate = PathBuf::from(raw);
                 if !candidate.exists() {
-                    return Err(format!(
-                        "工作区路径不存在: {}",
-                        candidate.to_string_lossy()
-                    ));
+                    return Err(format!("工作区路径不存在: {}", candidate.to_string_lossy()));
                 }
                 candidate.canonicalize().unwrap_or(candidate)
             }
