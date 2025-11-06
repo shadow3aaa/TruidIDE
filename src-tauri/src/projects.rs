@@ -411,17 +411,22 @@ pub fn delete_project_entry(app: tauri::AppHandle, path: String) -> Result<(), S
         if !is_guest_path && !canonical_entry.starts_with(&projects_root) {
             return Err("目标路径不在受信目录内".into());
         }
+
+        if is_guest_path {
+            let env = crate::android::proot::prepare_proot_env(&app)?;
+            let guest_path = host_path_to_guest(&env, &canonical_entry)
+                .ok_or_else(|| "目标路径不在受信目录内".to_string())?;
+
+            if guest_path == "/" || guest_path == "/root" {
+                return Err("无法删除项目根目录".into());
+            }
+        } else if canonical_entry == projects_root {
+            return Err("无法删除项目根目录".into());
+        }
     }
 
     #[cfg(not(target_os = "android"))]
     if canonical_entry.starts_with(&projects_root) && canonical_entry == projects_root {
-        return Err("无法删除项目根目录".into());
-    }
-
-    #[cfg(target_os = "android")]
-    if is_guest_path {
-        return Err("目标路径不在受信目录内".into());
-    } else if canonical_entry == projects_root {
         return Err("无法删除项目根目录".into());
     }
 
@@ -466,10 +471,20 @@ pub fn rename_project_entry(
     }
 
     #[cfg(target_os = "android")]
-    if !is_guest_path && !canonical_entry.starts_with(&projects_root) {
-        return Err("目标路径不在受信目录内".into());
-    } else if is_guest_path {
-        return Err("目标路径不在受信目录内".into());
+    {
+        if !is_guest_path && !canonical_entry.starts_with(&projects_root) {
+            return Err("目标路径不在受信目录内".into());
+        }
+
+        if is_guest_path {
+            let env = crate::android::proot::prepare_proot_env(&app)?;
+            let guest_path = host_path_to_guest(&env, &canonical_entry)
+                .ok_or_else(|| "目标路径不在受信目录内".to_string())?;
+
+            if guest_path == "/" || guest_path == "/root" {
+                return Err("无法重命名项目根目录".into());
+            }
+        }
     }
 
     let normalized_name = normalize_entry_name(&new_name)?;
